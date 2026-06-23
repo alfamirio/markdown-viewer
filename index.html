@@ -1,0 +1,1744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Markdown Viewer</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+
+    /* ── Tokens ───────────────────────────────────────── */
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --surface2:  #1c2128;
+      --border:    #21262d;
+      --divider:   #30363d;
+      --accent:    #58a6ff;
+      --accent-dim:#1f4068;
+      --text:      #e6edf3;
+      --text-muted:#8b949e;
+      --text-dim:  #484f58;
+      --green:     #3fb950;
+      --orange:    #d29922;
+      --red:       #f85149;
+      --code-bg:   #1c2128;
+      --radius:    6px;
+      --mono:      'JetBrains Mono', 'Fira Code', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+      --sidebar-w: 220px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      overflow: hidden;
+    }
+
+    /* ── App shell ────────────────────────────────────── */
+    #app { display: flex; flex-direction: column; height: 100vh; }
+
+    /* ── Toolbar ──────────────────────────────────────── */
+    #toolbar {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 12px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      user-select: none;
+      min-width: 0;
+    }
+
+    .toolbar-brand {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--accent);
+      margin-right: 4px;
+      letter-spacing: -0.3px;
+      white-space: nowrap;
+    }
+
+    .toolbar-sep {
+      width: 1px;
+      height: 20px;
+      background: var(--divider);
+      margin: 0 5px;
+      flex-shrink: 0;
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 9px;
+      border-radius: var(--radius);
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 12.5px;
+      font-weight: 500;
+      letter-spacing: 0.1px;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
+      white-space: nowrap;
+      flex-shrink: 0;
+      opacity: 0.82;
+    }
+    .btn:hover { background: var(--border); color: var(--text); opacity: 1; }
+    .btn.active { background: var(--accent-dim); color: var(--accent); border-color: #58a6ff44; opacity: 1; }
+
+    .btn-icon {
+      padding: 4px 7px;
+      font-size: 13.5px;
+      font-family: var(--mono);
+      font-weight: 600;
+      min-width: 28px;
+      justify-content: center;
+    }
+
+    #status {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-left: auto;
+      padding: 0 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    #save-indicator { display: inline-flex; align-items: center; gap: 5px; transition: color 0.2s; }
+    #save-indicator.saved   { color: var(--green); }
+    #save-indicator.unsaved { color: var(--orange); }
+
+    /* ── Body row (sidebar + editor area) ─────────────── */
+    #body-row {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Notes sidebar ────────────────────────────────── */
+    #sidebar {
+      width: var(--sidebar-w);
+      background: var(--surface2);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow: hidden;
+      transition: width 0.18s ease, opacity 0.15s;
+    }
+    #sidebar.collapsed {
+      width: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #sidebar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px 7px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    #sidebar-header span {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    #btn-new-note {
+      padding: 2px 7px;
+      font-size: 16px;
+      line-height: 1;
+      border-radius: 4px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text);
+      opacity: 0.82;
+      cursor: pointer;
+      font-family: var(--mono);
+      transition: background 0.1s, color 0.1s, opacity 0.1s;
+    }
+    #btn-new-note:hover { background: var(--border); color: var(--accent); opacity: 1; }
+
+    #notes-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 0;
+      scrollbar-width: thin;
+      scrollbar-color: var(--divider) transparent;
+    }
+    #notes-list::-webkit-scrollbar { width: 5px; }
+    #notes-list::-webkit-scrollbar-thumb { background: var(--divider); border-radius: 4px; }
+
+    .note-item {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      padding: 0 4px 0 10px;
+      height: 32px;
+      cursor: pointer;
+      border-radius: 0;
+      transition: background 0.1s;
+      position: relative;
+    }
+    .note-item:hover { background: var(--border); }
+    .note-item.active {
+      background: var(--accent-dim);
+    }
+    .note-item.active .note-name { color: var(--accent); }
+
+    .note-name {
+      flex: 1;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      outline: none;
+      background: transparent;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      min-width: 0;
+    }
+    .note-name:focus {
+      cursor: text;
+      color: var(--text);
+      background: var(--code-bg);
+      border-radius: 3px;
+      padding: 1px 4px;
+    }
+
+    .note-delete {
+      opacity: 0;
+      border: none;
+      background: transparent;
+      color: var(--text-dim);
+      font-size: 14px;
+      cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 4px;
+      line-height: 1;
+      transition: opacity 0.1s, color 0.1s;
+      flex-shrink: 0;
+    }
+    .note-item:hover .note-delete { opacity: 1; }
+    .note-delete:hover { color: var(--red); background: #f8514920; }
+
+    /* ── Main editor area ─────────────────────────────── */
+    #editor-area {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    /* active note title bar */
+    #note-titlebar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 14px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    #note-title-input {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      background: transparent;
+      border: none;
+      outline: none;
+      flex: 1;
+      min-width: 0;
+    }
+    #note-title-input::placeholder { color: var(--text-dim); }
+
+    /* ── Panes ────────────────────────────────────────── */
+    #panes {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .pane {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .pane-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 14px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+    .pane-label .dot { width: 7px; height: 7px; border-radius: 50%; }
+    .dot-editor  { background: var(--orange); }
+    .dot-preview { background: var(--green); }
+
+    #divider {
+      width: 5px;
+      background: var(--border);
+      cursor: col-resize;
+      flex-shrink: 0;
+      transition: background 0.15s;
+      position: relative;
+    }
+    #divider:hover, #divider.dragging { background: var(--accent); }
+    #divider::after { content: ''; position: absolute; inset: 0 -4px; }
+
+    /* ── Editor wrapper + line numbers ───────────────── */
+    #editor-wrap {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      background: var(--bg);
+      position: relative;
+    }
+
+    /* Hidden mirror used only to measure how many visual rows each
+       logical line occupies once word-wrap folds it. Must match the
+       textarea's box model (font, padding, border, width) exactly. */
+    #wrap-mirror {
+      position: absolute;
+      visibility: hidden;
+      pointer-events: none;
+      top: 0; left: 0;
+      height: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: break-word;
+    }
+
+    #line-numbers {
+      flex-shrink: 0;
+      width: 44px;
+      padding: 20px 0 20px;
+      background: var(--bg);
+      border-right: 1px solid var(--border);
+      overflow: hidden;
+      text-align: right;
+      pointer-events: none;
+      user-select: none;
+    }
+    #line-numbers span {
+      display: block;
+      overflow: hidden;
+      font-family: var(--mono);
+      font-size: 13.5px;
+      line-height: 1.7;
+      color: var(--text-dim);
+      padding-right: 10px;
+      transition: color 0.1s;
+    }
+    #line-numbers span.active-line {
+      color: var(--text-muted);
+    }
+
+    /* ── Editor textarea ──────────────────────────────── */
+    #editor {
+      flex: 1;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13.5px;
+      line-height: 1.7;
+      padding: 20px 12px 20px 14px;
+      border: none;
+      outline: none;
+      resize: none;
+      overflow-y: auto;
+      tab-size: 2;
+      scrollbar-width: thin;
+      scrollbar-color: var(--divider) transparent;
+      caret-color: var(--accent);
+    }
+    #editor::selection { background: var(--accent-dim); }
+    #editor::-webkit-scrollbar { width: 7px; }
+    #editor::-webkit-scrollbar-thumb { background: var(--divider); border-radius: 4px; }
+
+    /* ── Preview ──────────────────────────────────────── */
+    #preview {
+      flex: 1;
+      background: var(--surface);
+      overflow-y: auto;
+      padding: 24px 32px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--divider) transparent;
+    }
+    #preview::-webkit-scrollbar { width: 7px; }
+    #preview::-webkit-scrollbar-thumb { background: var(--divider); border-radius: 4px; }
+
+    /* ── Preview typography ───────────────────────────── */
+    #preview h1,#preview h2,#preview h3,
+    #preview h4,#preview h5,#preview h6 {
+      font-family: var(--sans); font-weight: 600; color: var(--text);
+      line-height: 1.35; margin-top: 24px; margin-bottom: 12px;
+    }
+    #preview h1 { font-size:2em; border-bottom:1px solid var(--border); padding-bottom:10px; }
+    #preview h2 { font-size:1.5em; border-bottom:1px solid var(--border); padding-bottom:8px; }
+    #preview h3 { font-size:1.2em; }
+    #preview h4 { font-size:1em; }
+    #preview h5 { font-size:.9em; color:var(--text-muted); }
+    #preview h6 { font-size:.85em; color:var(--text-muted); }
+    #preview p  { line-height:1.75; color:var(--text); margin-bottom:14px; }
+    #preview a  { color:var(--accent); text-decoration:none; }
+    #preview a:hover { text-decoration:underline; }
+    #preview ul,#preview ol { padding-left:24px; margin-bottom:14px; line-height:1.75; }
+    #preview li+li { margin-top:4px; }
+    #preview blockquote {
+      border-left:3px solid var(--accent); margin:16px 0; padding:8px 16px;
+      background:var(--code-bg); border-radius:0 var(--radius) var(--radius) 0; color:var(--text-muted);
+    }
+    #preview blockquote p { margin:0; }
+    #preview code {
+      font-family:var(--mono); font-size:.88em; background:var(--code-bg);
+      border:1px solid var(--border); border-radius:4px; padding:1px 6px; color:#f0883e;
+    }
+    #preview pre {
+      background:var(--code-bg); border:1px solid var(--border); border-radius:var(--radius);
+      padding:16px 18px; overflow-x:auto; margin-bottom:16px;
+    }
+    #preview pre code { background:transparent; border:none; padding:0; color:var(--text); font-size:13px; line-height:1.6; white-space:inherit; }
+
+    /* When word-wrap is on, code blocks fold long lines instead of
+       scrolling horizontally — mirrors the editor's wrap behavior. */
+    #preview.wrap pre {
+      overflow-x: visible;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    #preview.no-wrap pre {
+      overflow-x: auto;
+      white-space: pre;
+      word-break: normal;
+    }
+    #preview table { border-collapse:collapse; width:100%; margin-bottom:16px; font-size:13.5px; }
+    #preview th,#preview td { border:1px solid var(--border); padding:7px 14px; text-align:left; }
+    #preview th { background:var(--code-bg); font-weight:600; color:var(--text-muted); }
+    #preview tr:nth-child(even) { background:#ffffff06; }
+    #preview hr { border:none; border-top:1px solid var(--border); margin:24px 0; }
+    #preview img { max-width:100%; border-radius:var(--radius); border:1px solid var(--border); }
+    #preview input[type="checkbox"] { accent-color:var(--accent); margin-right:6px; }
+    .hljs { background:transparent !important; }
+
+    /* ── Print / PDF ──────────────────────────────────── */
+    @media print {
+      @page { margin: 2cm 2.4cm; size: A4; }
+      html,body { height:auto!important; overflow:visible!important; background:#fff!important; color:#1a1a1a!important; font-size:11pt; }
+      #app { height:auto!important; }
+      #toolbar,#sidebar,#left-pane,#divider,#note-titlebar { display:none!important; }
+      #body-row,#panes { display:block!important; overflow:visible!important; height:auto!important; }
+      #editor-area { display:block!important; overflow:visible!important; height:auto!important; }
+      #right-pane { display:block!important; width:100%!important; flex:none!important; overflow:visible!important; height:auto!important; }
+      .pane-label { display:none!important; }
+      #preview { background:#fff!important; color:#1a1a1a!important; overflow:visible!important; height:auto!important; padding:0!important; font-size:11pt; line-height:1.7; }
+      #preview h1,#preview h2,#preview h3,#preview h4,#preview h5,#preview h6 { color:#111!important; page-break-after:avoid; }
+      #preview h1 { font-size:22pt; border-color:#ccc!important; }
+      #preview h2 { font-size:16pt; border-color:#ccc!important; }
+      #preview h3 { font-size:13pt; }
+      #preview a { color:#1a56db!important; text-decoration:underline; }
+      #preview a[href]::after { content:" (" attr(href) ")"; font-size:8pt; color:#666; word-break:break-all; }
+      #preview a[href^="#"]::after { content:""; }
+      #preview code { background:#f3f4f6!important; border:1px solid #d1d5db!important; color:#c2410c!important; font-size:9pt; }
+      #preview pre { background:#f8f9fa!important; border:1px solid #d1d5db!important; color:#1a1a1a!important; white-space:pre-wrap!important; word-break:break-word; page-break-inside:avoid; font-size:9pt; }
+      #preview pre code { background:transparent!important; border:none!important; color:inherit!important; }
+      #preview blockquote { border-left-color:#6b7280!important; background:#f9fafb!important; color:#374151!important; page-break-inside:avoid; }
+      #preview th { background:#f3f4f6!important; color:#374151!important; }
+      #preview th,#preview td { border-color:#d1d5db!important; }
+      #preview tr:nth-child(even) { background:#f9fafb!important; }
+      #preview table { page-break-inside:avoid; }
+      #preview hr { border-color:#d1d5db!important; }
+      #preview img { max-width:100%!important; border-color:#d1d5db!important; }
+      #preview p,#preview li { orphans:3; widows:3; }
+    }
+    #btn-pdf.printing { opacity:.5; pointer-events:none; }
+
+    #pdf-progress {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      z-index: 200;
+      background: var(--surface);
+      border: 1px solid var(--divider);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-family: var(--mono);
+      font-size: 11.5px;
+      color: var(--text-muted);
+      display: none;
+      align-items: center;
+      gap: 9px;
+      box-shadow: 0 8px 20px #0007;
+    }
+    #pdf-progress.show { display: flex; }
+    #pdf-progress .spin {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      border: 2px solid var(--divider);
+      border-top-color: var(--accent);
+      animation: pdfspin .7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes pdfspin { to { transform: rotate(360deg); } }
+
+    /* Off-screen render target used to rasterize the PDF pages */
+    #pdf-render-root {
+      position: fixed;
+      top: 0; left: -99999px;
+      width: 760px;
+      background: #fff;
+      z-index: -1;
+    }
+
+    /* ── Tooltips ─────────────────────────────────────── */
+    [data-tip] { position: relative; }
+    [data-tip]:hover::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      white-space: nowrap;
+      font-family: var(--mono);
+      font-size: 10px;
+      background: var(--divider);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      padding: 3px 7px;
+      border-radius: 4px;
+      pointer-events: none;
+      z-index: 99;
+    }
+
+    /* ── Word wrap ────────────────────────────────────── */
+    #editor.wrap    { white-space: pre-wrap; word-break: break-word; }
+    #editor.no-wrap { white-space: pre; word-break: normal; overflow-x: auto; }
+
+    /* ── Empty sidebar state ──────────────────────────── */
+    #notes-empty {
+      padding: 20px 14px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    /* ── Hotkeys modal ────────────────────────────────── */
+    #hk-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #00000088;
+      backdrop-filter: blur(3px);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+    #hk-overlay.open { display: flex; }
+
+    #hk-modal {
+      background: var(--surface);
+      border: 1px solid var(--divider);
+      border-radius: 10px;
+      width: min(680px, 96vw);
+      max-height: 82vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 24px 64px #000a;
+      animation: modal-in 0.15s ease;
+    }
+    @keyframes modal-in {
+      from { opacity: 0; transform: scale(0.96) translateY(8px); }
+      to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    #hk-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 22px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    #hk-header h2 {
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #hk-header h2 span { color: var(--accent); }
+    #hk-close {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 20px;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      line-height: 1;
+      transition: background 0.1s, color 0.1s;
+    }
+    #hk-close:hover { background: var(--border); color: var(--text); }
+
+    #hk-body {
+      overflow-y: auto;
+      padding: 14px 22px 20px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--divider) transparent;
+    }
+    #hk-body::-webkit-scrollbar { width: 5px; }
+    #hk-body::-webkit-scrollbar-thumb { background: var(--divider); border-radius: 4px; }
+
+    .hk-section-title {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.7px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin: 18px 0 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .hk-section-title:first-child { margin-top: 2px; }
+
+    .hk-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 24px;
+    }
+
+    .hk-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 5px 0;
+      gap: 12px;
+    }
+    .hk-desc {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      flex: 1;
+    }
+    .hk-keys {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      flex-shrink: 0;
+    }
+    kbd {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text);
+      background: var(--surface2);
+      border: 1px solid var(--divider);
+      border-bottom-width: 2px;
+      border-radius: 4px;
+      padding: 1px 6px;
+      min-width: 24px;
+      line-height: 1.6;
+    }
+    .hk-plus { font-size: 11px; color: var(--text-dim); }
+
+    #hk-footer {
+      padding: 10px 22px;
+      border-top: 1px solid var(--border);
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      flex-shrink: 0;
+    }
+
+    /* ── Warning footer ───────────────────────────────── */
+    #warning-footer {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 16px;
+      background: #1a1200;
+      border-top: 1px solid #3d2e00;
+      flex-shrink: 0;
+      user-select: none;
+      min-height: 30px;
+      position: relative;
+      z-index: 10;
+    }
+
+    #warning-footer .warn-icon {
+      font-size: 13px;
+      flex-shrink: 0;
+      opacity: 0.85;
+    }
+
+    #warning-footer .warn-text {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: #a07800;
+      line-height: 1.45;
+      flex: 1;
+    }
+
+    #warning-footer .warn-text strong {
+      color: #c99b00;
+      font-weight: 500;
+    }
+
+    #warning-footer .warn-text a {
+      color: #c99b00;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    #warning-footer .warn-text a:hover { color: #f0c000; }
+
+
+    @media print {
+      #warning-footer { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Toolbar ── -->
+  <div id="toolbar">
+    <span class="toolbar-brand">// md viewer</span>
+
+    <!-- Toggle sidebar -->
+    <button class="btn btn-icon active" id="btn-sidebar" data-tip="Toggle notes panel" onclick="toggleSidebar()">☰</button>
+
+    <div class="toolbar-sep"></div>
+
+    <!-- Format -->
+    <button class="btn btn-icon" data-tip="Bold  Ctrl+B"        onclick="fmt('**','**')"><b>B</b></button>
+    <button class="btn btn-icon" data-tip="Italic  Ctrl+I"      onclick="fmt('_','_')"><i>I</i></button>
+    <button class="btn btn-icon" data-tip="Strikethrough"        onclick="fmt('~~','~~')" style="text-decoration:line-through">S</button>
+    <button class="btn btn-icon" data-tip="Inline code  Ctrl+`" onclick="fmt('`','`')" style="font-size:11px">{ }</button>
+
+    <div class="toolbar-sep"></div>
+
+    <button class="btn" data-tip="Heading 1" onclick="fmtLine('# ')">H1</button>
+    <button class="btn" data-tip="Heading 2" onclick="fmtLine('## ')">H2</button>
+    <button class="btn" data-tip="Heading 3" onclick="fmtLine('### ')">H3</button>
+
+    <div class="toolbar-sep"></div>
+
+    <button class="btn" data-tip="Unordered list" onclick="fmtLine('- ')">— ul</button>
+    <button class="btn" data-tip="Ordered list"   onclick="fmtLine('1. ')">1. ol</button>
+    <button class="btn" data-tip="Blockquote"     onclick="fmtLine('> ')">&gt; bq</button>
+    <button class="btn" data-tip="Code block"     onclick="fmtBlock()">``` block</button>
+    <button class="btn" data-tip="Horizontal rule" onclick="insertText('\n---\n')">— hr</button>
+    <button class="btn" data-tip="Link"            onclick="insertLink()">🔗 link</button>
+
+    <div class="toolbar-sep"></div>
+
+    <button class="btn" id="btn-wrap" data-tip="Toggle word wrap" onclick="toggleWrap()">wrap</button>
+
+    <div class="toolbar-sep"></div>
+
+    <button class="btn" data-tip="Download .md"          onclick="downloadMd()">↓ .md</button>
+    <button class="btn" id="btn-pdf" data-tip="Export PDF" onclick="exportPdf()">↓ .pdf</button>
+    <button class="btn" data-tip="Copy raw markdown"     onclick="copyRaw()">⎘ copy</button>
+    <button class="btn" data-tip="Delete this note"      onclick="deleteCurrentNote()" style="color:var(--red)">✕ note</button>
+
+    <button class="btn" data-tip="Keyboard shortcuts  ?" onclick="openHkModal()" style="margin-left:4px">? keys</button>
+
+    <div id="status">
+      <span id="word-count">0 words</span>
+      <span id="save-indicator" class="saved">● saved</span>
+    </div>
+  </div>
+
+  <!-- ── Body row ── -->
+  <div id="body-row">
+
+    <!-- ── Notes sidebar ── -->
+    <div id="sidebar">
+      <div id="sidebar-header">
+        <span>Notes</span>
+        <button id="btn-new-note" data-tip="New note" onclick="createNote()">+</button>
+      </div>
+      <div id="notes-list"></div>
+    </div>
+
+    <!-- ── Editor area ── -->
+    <div id="editor-area">
+
+      <!-- Active note title -->
+      <div id="note-titlebar">
+        <input id="note-title-input" type="text" spellcheck="false" placeholder="Untitled note"
+               oninput="renameCurrentNote(this.value)" />
+      </div>
+
+      <!-- Side-by-side panes -->
+      <div id="panes">
+        <div class="pane" id="left-pane">
+          <div class="pane-label"><span class="dot dot-editor"></span>editor</div>
+          <div id="editor-wrap">
+            <div id="line-numbers"></div>
+            <textarea id="editor" class="wrap" spellcheck="false" placeholder="Start writing Markdown here…"></textarea>
+            <div id="wrap-mirror"></div>
+          </div>
+        </div>
+
+        <div id="divider"></div>
+
+        <div class="pane" id="right-pane">
+          <div class="pane-label"><span class="dot dot-preview"></span>preview</div>
+          <div id="preview" class="wrap"></div>
+        </div>
+      </div>
+
+    </div><!-- /editor-area -->
+  </div><!-- /body-row -->
+  <!-- ── Warning footer ── -->
+  <div id="warning-footer">
+    <span class="warn-icon">⚠</span>
+    <span class="warn-text">
+      <strong>localStorage only</strong> — Notes are saved in your browser's localStorage and will be lost if you clear site data.
+      <strong>Export regularly</strong> using ↓&nbsp;.md.
+      This tool is provided <strong>as-is, with no warranty</strong> of any kind — not for production use.
+    </span>
+  </div>
+
+</div><!-- /app -->
+
+<!-- Hidden render target for PDF rasterization -->
+<div id="pdf-render-root"></div>
+
+<!-- PDF export progress toast -->
+<div id="pdf-progress"><span class="spin"></span><span id="pdf-progress-text">Rendering PDF…</span></div>
+
+
+<!-- marked + highlight.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+<!-- html2canvas + jsPDF for true PDF export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  Constants & element refs
+// ═══════════════════════════════════════════════════
+const NOTES_INDEX_KEY = 'md_notes_index';   // JSON array of {id, name}
+const noteContent     = id => 'md_note_' + id;
+
+const editor       = document.getElementById('editor');
+const preview      = document.getElementById('preview');
+const saveEl       = document.getElementById('save-indicator');
+const wordEl       = document.getElementById('word-count');
+const btnWrap      = document.getElementById('btn-wrap');
+const notesList    = document.getElementById('notes-list');
+const noteTitleEl  = document.getElementById('note-title-input');
+const btnSidebar   = document.getElementById('btn-sidebar');
+
+// ═══════════════════════════════════════════════════
+//  Notes state
+// ═══════════════════════════════════════════════════
+let notes      = [];   // [{id, name}, …]
+let activeId   = null;
+let saveTimer;
+
+function genId() {
+  return 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+}
+
+// ── Persistence ────────────────────────────────────
+function saveIndex() {
+  localStorage.setItem(NOTES_INDEX_KEY, JSON.stringify(notes));
+}
+
+function saveContent(id, text) {
+  try {
+    localStorage.setItem(noteContent(id), text);
+  } catch(e) {
+    saveEl.textContent = '✕ storage full';
+  }
+}
+
+function loadContent(id) {
+  return localStorage.getItem(noteContent(id)) ?? '';
+}
+
+// ── Create / delete ────────────────────────────────
+function createNote(name, content) {
+  const id = genId();
+  name = name || 'Untitled ' + (notes.length + 1);
+  notes.push({ id, name });
+  saveIndex();
+  saveContent(id, content ?? DEFAULT_CONTENT(name));
+  switchNote(id);
+  renderSidebar();
+  // Focus title for immediate rename
+  setTimeout(() => { noteTitleEl.select(); }, 50);
+  return id;
+}
+
+function deleteNote(id) {
+  if (notes.length === 1) {
+    // Don't delete the last note — just clear it
+    editor.value = '';
+    render();
+    scheduleSave();
+    return;
+  }
+  const idx = notes.findIndex(n => n.id === id);
+  notes.splice(idx, 1);
+  localStorage.removeItem(noteContent(id));
+  saveIndex();
+  // Switch to adjacent note
+  const nextIdx = Math.min(idx, notes.length - 1);
+  switchNote(notes[nextIdx].id);
+  renderSidebar();
+}
+
+function deleteCurrentNote() {
+  if (!confirm('Delete this note?')) return;
+  deleteNote(activeId);
+}
+
+function renameCurrentNote(name) {
+  const note = notes.find(n => n.id === activeId);
+  if (!note) return;
+  note.name = name || 'Untitled';
+  saveIndex();
+  // Update sidebar label without full re-render to avoid focus loss
+  const item = notesList.querySelector(`.note-item[data-id="${activeId}"] .note-name`);
+  if (item && item !== document.activeElement) item.value = note.name;
+}
+
+// ── Switch active note ─────────────────────────────
+function switchNote(id) {
+  // Save current before switching
+  if (activeId) saveContent(activeId, editor.value);
+
+  activeId = id;
+  const note = notes.find(n => n.id === id);
+  editor.value = loadContent(id);
+  noteTitleEl.value = note ? note.name : '';
+  render();
+  markSaved();
+  renderSidebar();
+  editor.scrollTop = 0;
+  preview.scrollTop = 0;
+}
+
+// ── Sidebar DOM ────────────────────────────────────
+function renderSidebar() {
+  notesList.innerHTML = '';
+  if (notes.length === 0) {
+    notesList.innerHTML = '<div id="notes-empty">No notes yet.<br>Press + to create one.</div>';
+    return;
+  }
+  notes.forEach(note => {
+    const item = document.createElement('div');
+    item.className = 'note-item' + (note.id === activeId ? ' active' : '');
+    item.dataset.id = note.id;
+
+    // Editable name
+    const nameEl = document.createElement('input');
+    nameEl.type = 'text';
+    nameEl.className = 'note-name';
+    nameEl.value = note.name;
+    nameEl.spellcheck = false;
+    nameEl.title = 'Click to open · Double-click to rename';
+
+    // Single click → switch note
+    nameEl.addEventListener('mousedown', e => {
+      if (note.id !== activeId) {
+        e.preventDefault();
+        switchNote(note.id);
+      }
+    });
+    // Double-click → let input be editable
+    nameEl.addEventListener('dblclick', e => { nameEl.focus(); nameEl.select(); });
+    nameEl.addEventListener('blur', () => {
+      note.name = nameEl.value.trim() || 'Untitled';
+      nameEl.value = note.name;
+      if (note.id === activeId) noteTitleEl.value = note.name;
+      saveIndex();
+    });
+    nameEl.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); }
+      if (e.key === 'Escape') { nameEl.value = note.name; nameEl.blur(); }
+    });
+    // Prevent sidebar-input typing from triggering editor shortcuts
+    nameEl.addEventListener('input', e => e.stopPropagation());
+
+    // Delete button
+    const delBtn = document.createElement('button');
+    delBtn.className = 'note-delete';
+    delBtn.textContent = '×';
+    delBtn.title = 'Delete note';
+    delBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (notes.length === 1 || confirm(`Delete "${note.name}"?`)) deleteNote(note.id);
+    });
+
+    item.appendChild(nameEl);
+    item.appendChild(delBtn);
+    notesList.appendChild(item);
+  });
+}
+
+// ── Sidebar toggle ─────────────────────────────────
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('collapsed');
+  btnSidebar.classList.toggle('active');
+  mirrorMetricsDirty = true;
+  setTimeout(() => { mirrorMetricsDirty = true; if (wrapOn) updateLineNumbers(); }, 200);
+}
+
+// ═══════════════════════════════════════════════════
+//  marked config
+// ═══════════════════════════════════════════════════
+marked.setOptions({
+  highlight(code, lang) {
+    if (lang && hljs.getLanguage(lang)) return hljs.highlight(code, { language: lang }).value;
+    return hljs.highlightAuto(code).value;
+  },
+  breaks: true,
+  gfm: true,
+});
+
+// ═══════════════════════════════════════════════════
+//  Render
+// ═══════════════════════════════════════════════════
+function render() {
+  preview.innerHTML = marked.parse(editor.value);
+  preview.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = false);
+  updateStatus();
+  updateLineNumbers();
+}
+
+// ═══════════════════════════════════════════════════
+//  Line-number gutter (wrap-aware)
+// ═══════════════════════════════════════════════════
+const wrapMirror = document.getElementById('wrap-mirror');
+let mirrorMetricsDirty = true;
+
+// Copy the textarea's exact box model onto the mirror so wrapped
+// row counts measured there match what's rendered on screen.
+// Only horizontal padding matters here — it affects where lines fold.
+// Vertical padding must NOT be copied, since the gutter already has
+// its own matching top/bottom padding applied once for the whole column.
+function syncMirrorMetrics() {
+  const cs = getComputedStyle(editor);
+  wrapMirror.style.width      = editor.clientWidth + 'px';
+  wrapMirror.style.fontSize   = cs.fontSize;
+  wrapMirror.style.fontFamily = cs.fontFamily;
+  wrapMirror.style.fontWeight = cs.fontWeight;
+  wrapMirror.style.lineHeight = cs.lineHeight;
+  wrapMirror.style.letterSpacing = cs.letterSpacing;
+  wrapMirror.style.paddingTop = '0px';
+  wrapMirror.style.paddingBottom = '0px';
+  wrapMirror.style.paddingLeft = cs.paddingLeft;
+  wrapMirror.style.paddingRight = cs.paddingRight;
+  wrapMirror.style.borderWidth = cs.borderWidth;
+  wrapMirror.style.boxSizing  = cs.boxSizing;
+  wrapMirror.style.tabSize    = cs.tabSize;
+  wrapMirror.style.whiteSpace = wrapOn ? 'pre-wrap' : 'pre';
+  mirrorMetricsDirty = false;
+}
+
+function updateLineNumbers() {
+  const ln = document.getElementById('line-numbers');
+  if (!ln) return;
+  if (mirrorMetricsDirty) syncMirrorMetrics();
+
+  const lines = editor.value.split('\n');
+  const cursorLine = editor.value.substring(0, editor.selectionStart).split('\n').length;
+
+  // One row of unwrapped text, in px, per the shared line-height.
+  const rowH = parseFloat(getComputedStyle(editor).lineHeight) || 22.95;
+
+  // Measure how many visual rows each logical line takes once wrapped.
+  // Only needed when wrap is on and lines might actually fold; when
+  // wrap is off every logical line is exactly one visual row. Short
+  // lines can't possibly wrap, so skip the (layout-forcing) mirror
+  // measurement for those to keep large documents responsive.
+  let rowCounts;
+  if (wrapOn) {
+    // Conservative character estimate of how many chars fit one row,
+    // derived from a monospace assumption — used only to short-circuit
+    // obviously-short lines, never to compute the final row count.
+    const approxCharsPerRow = Math.max(20, Math.floor(editor.clientWidth / (parseFloat(getComputedStyle(editor).fontSize) * 0.62)));
+    rowCounts = lines.map(line => {
+      if (line.length < approxCharsPerRow * 0.9) return 1;
+      wrapMirror.textContent = line;
+      return Math.max(1, Math.round(wrapMirror.scrollHeight / rowH));
+    });
+  } else {
+    rowCounts = lines.map(() => 1);
+  }
+
+  ln.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  lines.forEach((line, i) => {
+    const s = document.createElement('span');
+    s.textContent = i + 1;
+    s.style.height = (rowCounts[i] * rowH) + 'px';
+    if (i + 1 === cursorLine) s.className = 'active-line';
+    frag.appendChild(s);
+  });
+  ln.appendChild(frag);
+
+  // Keep gutter scroll in sync
+  ln.scrollTop = editor.scrollTop;
+}
+
+// ═══════════════════════════════════════════════════
+//  Synchronized scrolling
+// ═══════════════════════════════════════════════════
+let suppressEditorScroll  = false;
+let suppressPreviewScroll = false;
+
+editor.addEventListener('scroll', () => {
+  document.getElementById('line-numbers').scrollTop = editor.scrollTop;
+  if (suppressEditorScroll) return;
+  const pct = editor.scrollTop / (editor.scrollHeight - editor.clientHeight || 1);
+  suppressPreviewScroll = true;
+  preview.scrollTop = pct * (preview.scrollHeight - preview.clientHeight);
+  requestAnimationFrame(() => { suppressPreviewScroll = false; });
+});
+
+preview.addEventListener('scroll', () => {
+  if (suppressPreviewScroll) return;
+  const pct = preview.scrollTop / (preview.scrollHeight - preview.clientHeight || 1);
+  suppressEditorScroll = true;
+  editor.scrollTop = pct * (editor.scrollHeight - editor.clientHeight);
+  requestAnimationFrame(() => { suppressEditorScroll = false; });
+});
+
+// ═══════════════════════════════════════════════════
+//  Status
+// ═══════════════════════════════════════════════════
+function updateStatus() {
+  const words = editor.value.trim() ? editor.value.trim().split(/\s+/).length : 0;
+  wordEl.textContent = words + (words === 1 ? ' word' : ' words');
+}
+
+function markSaved()   { saveEl.className = 'saved';   saveEl.textContent = '● saved'; }
+function markUnsaved() { saveEl.className = 'unsaved'; saveEl.textContent = '● unsaved'; }
+
+// ═══════════════════════════════════════════════════
+//  Auto-save
+// ═══════════════════════════════════════════════════
+function scheduleSave() {
+  markUnsaved();
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { saveContent(activeId, editor.value); markSaved(); }, 800);
+}
+
+editor.addEventListener('input', () => { render(); scheduleSave(); });
+editor.addEventListener('click', updateLineNumbers);
+editor.addEventListener('keyup', e => {
+  // Only update highlight on navigation keys (not every character to save work)
+  const nav = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End','PageUp','PageDown'];
+  if (nav.includes(e.key)) updateLineNumbers();
+});
+
+// Title input
+noteTitleEl.addEventListener('input', e => {
+  renameCurrentNote(e.target.value);
+});
+
+// ═══════════════════════════════════════════════════
+//  Keyboard shortcuts
+// ═══════════════════════════════════════════════════
+editor.addEventListener('keydown', handleKeys);
+
+function handleKeys(e) {
+  const mod   = e.ctrlKey || e.metaKey;
+  const shift = e.shiftKey;
+  const alt   = e.altKey;
+
+  // ── Formatting ──────────────────────────────────
+  if (mod && !shift && !alt && e.key === 'b') { e.preventDefault(); fmt('**','**'); return; }
+  if (mod && !shift && !alt && e.key === 'i') { e.preventDefault(); fmt('_','_'); return; }
+  if (mod && !shift && !alt && e.key === 'd') { e.preventDefault(); fmt('~~','~~'); return; }
+  if (mod && !shift && !alt && e.key === '`') { e.preventDefault(); fmt('`','`'); return; }
+  if (mod && !shift && !alt && e.key === '1') { e.preventDefault(); fmtLine('# '); return; }
+  if (mod && !shift && !alt && e.key === '2') { e.preventDefault(); fmtLine('## '); return; }
+  if (mod && !shift && !alt && e.key === '3') { e.preventDefault(); fmtLine('### '); return; }
+  if (mod && !shift && !alt && e.key === 'q') { e.preventDefault(); fmtLine('> '); return; }
+  if (mod && !shift && !alt && e.key === 'k') { e.preventDefault(); insertLink(); return; }
+  if (mod && !shift && !alt && e.key === 'h') { e.preventDefault(); insertText('\n---\n'); return; }
+  if (mod &&  shift && !alt && e.key === 'K') { e.preventDefault(); fmtBlock(); return; }
+  if (mod &&  shift && !alt && e.key === 'U') { e.preventDefault(); fmtLine('- '); return; }
+  if (mod &&  shift && !alt && e.key === 'O') { e.preventDefault(); fmtLine('1. '); return; }
+
+  // ── Tab / Shift+Tab ─────────────────────────────
+  if (!mod && !alt && e.key === 'Tab') {
+    e.preventDefault();
+    if (shift) { outdentLine(); } else { insertText('  '); }
+    return;
+  }
+
+  // ── File / editor ───────────────────────────────
+  if (mod && !shift && !alt && e.key === 's') { e.preventDefault(); saveContent(activeId, editor.value); markSaved(); return; }
+  if (mod &&  shift && !alt && e.key === 'S') { e.preventDefault(); downloadMd(); return; }
+  if (mod && !shift && !alt && e.key === 'p') { e.preventDefault(); exportPdf(); return; }
+  if (mod && !shift && !alt && e.key === 'e') { e.preventDefault(); editor.focus(); return; }
+  if (!mod && !shift &&  alt && e.key === 'z') { e.preventDefault(); toggleWrap(); return; }
+
+  // ── Notes ───────────────────────────────────────
+  if (mod && !shift &&  alt && e.key === 'n') { e.preventDefault(); createNote(); return; }
+  if (mod && !shift && !alt && e.key === '\\') { e.preventDefault(); toggleSidebar(); return; }
+  if (mod && !shift && !alt && e.key === ']') { e.preventDefault(); cycleNote(1); return; }
+  if (mod && !shift && !alt && e.key === '[') { e.preventDefault(); cycleNote(-1); return; }
+}
+
+// Global shortcuts (outside editor too)
+document.addEventListener('keydown', e => {
+  // ? opens hotkey modal (only when not typing in an input/textarea)
+  const tag = document.activeElement.tagName;
+  const isInput = tag === 'INPUT' || tag === 'TEXTAREA';
+  if (!isInput && e.key === '?') { e.preventDefault(); openHkModal(); return; }
+  if (e.key === 'Escape') { closeHkModal(); return; }
+
+  const mod   = e.ctrlKey || e.metaKey;
+  const shift = e.shiftKey;
+  const alt   = e.altKey;
+
+  // Notes navigation (global — works even when sidebar name is focused)
+  if (mod && !shift &&  alt && e.key === 'n') { e.preventDefault(); createNote(); return; }
+  if (mod && !shift && !alt && e.key === '\\') { e.preventDefault(); toggleSidebar(); return; }
+  if (mod && !shift && !alt && e.key === ']') { e.preventDefault(); cycleNote(1); return; }
+  if (mod && !shift && !alt && e.key === '[') { e.preventDefault(); cycleNote(-1); return; }
+});
+
+// ── Cycle through notes ────────────────────────────
+function cycleNote(dir) {
+  if (notes.length < 2) return;
+  const idx = notes.findIndex(n => n.id === activeId);
+  const next = (idx + dir + notes.length) % notes.length;
+  switchNote(notes[next].id);
+}
+
+// ── Outdent current line ───────────────────────────
+function outdentLine() {
+  const s  = editor.selectionStart;
+  const ls = editor.value.lastIndexOf('\n', s - 1) + 1;
+  const le = editor.value.indexOf('\n', s);
+  const e2 = le === -1 ? editor.value.length : le;
+  const line = editor.value.slice(ls, e2);
+  if (line.startsWith('  ')) spliceText(ls, e2, line.slice(2));
+  else if (line.startsWith('\t')) spliceText(ls, e2, line.slice(1));
+}
+
+// ═══════════════════════════════════════════════════
+//  Format helpers
+// ═══════════════════════════════════════════════════
+function fmt(before, after) {
+  const s = editor.selectionStart, e2 = editor.selectionEnd;
+  const sel = editor.value.slice(s, e2);
+  spliceText(s, e2, before + (sel || 'text') + after);
+  editor.setSelectionRange(s + before.length, s + before.length + (sel || 'text').length);
+}
+
+function fmtLine(prefix) {
+  const s = editor.selectionStart;
+  const ls = editor.value.lastIndexOf('\n', s - 1) + 1;
+  const le = editor.value.indexOf('\n', s);
+  const e2 = le === -1 ? editor.value.length : le;
+  const line = editor.value.slice(ls, e2);
+  spliceText(ls, e2, line.startsWith(prefix) ? line.slice(prefix.length) : prefix + line);
+}
+
+function fmtBlock() {
+  const s = editor.selectionStart, e2 = editor.selectionEnd;
+  spliceText(s, e2, '```\n' + (editor.value.slice(s, e2) || 'code here') + '\n```');
+}
+
+function insertLink() {
+  const s = editor.selectionStart, e2 = editor.selectionEnd;
+  spliceText(s, e2, '[' + (editor.value.slice(s, e2) || 'link text') + '](url)');
+}
+
+function insertText(text) {
+  const s = editor.selectionStart;
+  spliceText(s, s, text);
+}
+
+function spliceText(start, end, text) {
+  editor.focus();
+  editor.setSelectionRange(start, end);
+  document.execCommand('insertText', false, text);
+  render();
+  scheduleSave();
+}
+
+// ═══════════════════════════════════════════════════
+//  Word wrap
+// ═══════════════════════════════════════════════════
+let wrapOn = true;
+function toggleWrap() {
+  wrapOn = !wrapOn;
+  editor.className = wrapOn ? 'wrap' : 'no-wrap';
+  preview.className = wrapOn ? 'wrap' : 'no-wrap';
+  btnWrap.classList.toggle('active', wrapOn);
+  mirrorMetricsDirty = true;
+  updateLineNumbers();
+}
+
+// ═══════════════════════════════════════════════════
+//  PDF / Download
+// ═══════════════════════════════════════════════════
+function printFallback() {
+  const prev = document.title;
+  document.title = (noteTitleEl.value.trim() || 'note');
+  window.print();
+  document.title = prev;
+}
+
+function pdfProgress(show, text) {
+  const el = document.getElementById('pdf-progress');
+  el.classList.toggle('show', show);
+  if (text) document.getElementById('pdf-progress-text').textContent = text;
+}
+
+// Builds a clean, light, print-ready copy of the rendered markdown
+// inside the off-screen #pdf-render-root, ready for rasterization.
+function buildPdfDom() {
+  const root = document.getElementById('pdf-render-root');
+  root.innerHTML = '';
+
+  const page = document.createElement('div');
+  page.style.cssText = `
+    width: 760px;
+    padding: 0 56px;
+    background: #ffffff;
+    color: #1a1a1a;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 12px;
+    line-height: 1.6;
+    box-sizing: border-box;
+  `;
+
+  const body = document.createElement('div');
+  body.innerHTML = marked.parse(editor.value);
+  body.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.disabled = true; });
+  page.appendChild(body);
+  root.appendChild(page);
+
+  // Light-mode overrides so the PDF is readable on paper (mirrors the
+  // existing @media print rules but applied directly for canvas capture).
+  const style = document.createElement('style');
+  style.textContent = `
+    #pdf-render-root h1,#pdf-render-root h2,#pdf-render-root h3,
+    #pdf-render-root h4,#pdf-render-root h5,#pdf-render-root h6 {
+      color:#111; font-weight:600; margin: 17px 0 7.5px; line-height:1.3;
+    }
+    #pdf-render-root h1 { font-size:19px; border-bottom:1px solid #e1e4e8; padding-bottom:7.5px; }
+    #pdf-render-root h2 { font-size:15px; border-bottom:1px solid #e1e4e8; padding-bottom:5.5px; }
+    #pdf-render-root h3 { font-size:13px; }
+    #pdf-render-root h4 { font-size:12px; }
+    #pdf-render-root p  { margin-bottom:10.5px; }
+    #pdf-render-root a  { color:#1a56db; text-decoration:underline; word-break:break-word; }
+    #pdf-render-root ul,#pdf-render-root ol { padding-left:21px; margin-bottom:10.5px; }
+    #pdf-render-root li+li { margin-top:3px; }
+    #pdf-render-root blockquote {
+      border-left:3px solid #6b7280; background:#f9fafb; color:#374151;
+      padding:7.5px 13.5px; margin:10.5px 0; border-radius:0 4px 4px 0;
+    }
+    #pdf-render-root blockquote p { margin:0; }
+    #pdf-render-root code {
+      background:#f3f4f6; border:1px solid #d1d5db; color:#c2410c;
+      font-family:'JetBrains Mono',monospace; font-size:10.5px;
+      padding:1px 5px; border-radius:4px;
+    }
+    #pdf-render-root pre {
+      background:#f8f9fa; border:1px solid #d1d5db; color:#1a1a1a;
+      padding:9.5px 11.5px; border-radius:6px; margin-bottom:10.5px;
+      white-space:pre-wrap; word-break:break-word; overflow:visible;
+    }
+    #pdf-render-root pre code { background:transparent; border:none; padding:0; font-size:10px; line-height:1.5; }
+    #pdf-render-root table { border-collapse:collapse; width:100%; margin-bottom:12.5px; font-size:11px; }
+    #pdf-render-root th,#pdf-render-root td { border:1px solid #d1d5db; padding:5.5px 9.5px; text-align:left; }
+    #pdf-render-root th { background:#f3f4f6; color:#374151; font-weight:600; }
+    #pdf-render-root tr:nth-child(even) { background:#f9fafb; }
+    #pdf-render-root hr { border:none; border-top:1px solid #d1d5db; margin:17px 0; }
+    #pdf-render-root img { max-width:100%; border-radius:4px; border:1px solid #d1d5db; }
+    #pdf-render-root .hljs { background:transparent !important; color:#1a1a1a !important; }
+  `;
+  root.appendChild(style);
+
+  return { page, body };
+}
+
+// Collects y-offsets (in CSS px, relative to `page`'s top edge) where it's
+// safe to cut a PDF page — i.e. between lines/elements, never through one.
+// Block-level elements (p, li, tr, headings, hr, blockquote) contribute
+// their top and bottom edges. Elements whose content can itself span
+// multiple visual rows (pre, blockquote, td text) additionally contribute
+// per-line offsets so a tall block can still be split, just never mid-line.
+function collectBreakPoints(page, body) {
+  const points = new Set([0]);
+  const pageTop = page.getBoundingClientRect().top;
+
+  function addEdges(el) {
+    const r = el.getBoundingClientRect();
+    points.add(Math.round(r.top - pageTop));
+    points.add(Math.round(r.bottom - pageTop));
+  }
+
+  function addTextLines(el) {
+    // Walk text nodes and use Range rects to find each wrapped line's
+    // bottom edge — this is what lets us split a tall <pre> safely.
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      if (!node.nodeValue || !node.nodeValue.trim()) continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const rects = range.getClientRects();
+      for (const r of rects) {
+        if (r.height === 0) continue;
+        points.add(Math.round(r.top - pageTop));
+        points.add(Math.round(r.bottom - pageTop));
+      }
+    }
+  }
+
+  const blockSelector = 'p, li, tr, h1, h2, h3, h4, h5, h6, hr, blockquote, pre, img, table';
+  body.querySelectorAll(blockSelector).forEach(el => {
+    // Skip nested blocks already covered by an ancestor match
+    // (e.g. a <p> inside a <blockquote> — the blockquote's own
+    // line-level breakdown already covers it).
+    addEdges(el);
+  });
+
+  // Add per-line breakpoints inside any text-bearing block so a single
+  // unusually tall paragraph, list item, table cell, or code block can
+  // still be split across pages — just never through the middle of a line.
+  body.querySelectorAll('p, li, blockquote, pre, td, th').forEach(addTextLines);
+
+  return Array.from(points).sort((a, b) => a - b);
+}
+
+async function exportPdf() {
+  if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
+    // Libraries failed to load (e.g. offline) — fall back to native print.
+    printFallback();
+    return;
+  }
+
+  const btn = document.getElementById('btn-pdf');
+  btn.classList.add('printing');
+  pdfProgress(true, 'Rendering PDF…');
+
+  try {
+    const title = noteTitleEl.value.trim() || 'note';
+    const { page, body } = buildPdfDom();
+
+    // Let images/fonts settle before measuring/capturing.
+    await new Promise(r => setTimeout(r, 60));
+
+    // Measure safe break points while the content is still live DOM —
+    // these are CSS-px offsets, relative to the page's top edge, that
+    // fall between lines/elements rather than through one.
+    const breakPointsCss = collectBreakPoints(page, body);
+
+    const scale = 2;
+    const canvas = await html2canvas(page, {
+      scale,
+      backgroundColor: '#ffffff',
+      useCORS: true,
+      windowWidth: page.scrollWidth,
+    });
+
+    pdfProgress(true, 'Paginating…');
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const marginPt = 40; // consistent top + bottom margin on every page
+
+    const imgW = pageW; // content already padded horizontally inside the page element
+    const usableH = pageH - marginPt * 2;
+
+    const pxPerPt = canvas.width / imgW;
+    const usableHpx = usableH * pxPerPt;
+
+    // Break points measured in CSS px -> canvas px (account for html2canvas scale).
+    const breakPointsPx = breakPointsCss.map(p => p * scale).filter(p => p <= canvas.height);
+    if (breakPointsPx[breakPointsPx.length - 1] !== canvas.height) breakPointsPx.push(canvas.height);
+
+    // For a given target cut position, find the closest safe break point
+    // at or before it. Falls back to the hard pixel limit only when no
+    // safe point exists in range (e.g. one element taller than a page).
+    function nearestSafeCut(idealPos, floorPos) {
+      let best = -1;
+      for (const p of breakPointsPx) {
+        if (p > floorPos && p <= idealPos) best = Math.max(best, p);
+        if (p > idealPos) break;
+      }
+      return best > floorPos ? best : idealPos;
+    }
+
+    let renderedH = 0;
+    let first = true;
+    while (renderedH < canvas.height) {
+      const idealEnd = Math.min(renderedH + usableHpx, canvas.height);
+      let cutAt = idealEnd >= canvas.height ? canvas.height : nearestSafeCut(idealEnd, renderedH);
+      if (cutAt <= renderedH) cutAt = idealEnd; // safety: guarantee forward progress
+      const sliceH = cutAt - renderedH;
+
+      const sliceCanvas = document.createElement('canvas');
+      sliceCanvas.width = canvas.width;
+      sliceCanvas.height = sliceH;
+      const ctx = sliceCanvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+      ctx.drawImage(canvas, 0, renderedH, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+
+      const sliceImgH = (sliceH * imgW) / canvas.width;
+      if (!first) pdf.addPage();
+      pdf.addImage(sliceCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, marginPt, imgW, sliceImgH);
+
+      renderedH = cutAt;
+      first = false;
+    }
+
+    pdf.save(title + '.pdf');
+  } catch (err) {
+    console.error('PDF export failed:', err);
+    pdfProgress(false);
+    if (confirm('PDF export failed. Use the browser print dialog instead?')) printFallback();
+    btn.classList.remove('printing');
+    document.getElementById('pdf-render-root').innerHTML = '';
+    return;
+  }
+
+  document.getElementById('pdf-render-root').innerHTML = '';
+  pdfProgress(false);
+  btn.classList.remove('printing');
+}
+
+function downloadMd() {
+  const blob = new Blob([editor.value], { type: 'text/markdown' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (noteTitleEl.value.trim() || 'note') + '.md';
+  a.click();
+}
+
+
+function copyRaw() {
+  navigator.clipboard.writeText(editor.value).then(() => {
+    const prev = saveEl.textContent;
+    saveEl.textContent = '✓ copied!';
+    setTimeout(() => { saveEl.textContent = prev; }, 1500);
+  });
+}
+
+// ═══════════════════════════════════════════════════
+//  Drag-to-resize panes
+// ═══════════════════════════════════════════════════
+const divider  = document.getElementById('divider');
+const leftPane = document.getElementById('left-pane');
+const rightPane= document.getElementById('right-pane');
+let dragging   = false;
+
+divider.addEventListener('mousedown', () => {
+  dragging = true;
+  divider.classList.add('dragging');
+  document.body.style.cursor = 'col-resize';
+  document.body.style.userSelect = 'none';
+});
+document.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const rect  = document.getElementById('panes').getBoundingClientRect();
+  const pct   = Math.max(20, Math.min(80, (e.clientX - rect.left) / (rect.width - divider.offsetWidth) * 100));
+  leftPane.style.flex  = 'none';
+  leftPane.style.width = pct + '%';
+  rightPane.style.flex  = 'none';
+  rightPane.style.width = (100 - pct) + '%';
+  mirrorMetricsDirty = true;
+  if (wrapOn) updateLineNumbers();
+});
+document.addEventListener('mouseup', () => {
+  if (!dragging) return;
+  dragging = false;
+  divider.classList.remove('dragging');
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+  mirrorMetricsDirty = true;
+  if (wrapOn) updateLineNumbers();
+});
+
+// ═══════════════════════════════════════════════════
+//  Default content
+// ═══════════════════════════════════════════════════
+function DEFAULT_CONTENT(name) {
+  return `# ${name}
+
+Start writing here. Your note is **auto-saved** to \`localStorage\`.
+
+## Tips
+
+- Use the **Notes** panel on the left to switch between notes
+- Click **+** to create a new note
+- Double-click a note name in the sidebar to rename it
+- Edit the title above the editor to rename the current note
+- Use \`Ctrl+S\` to save immediately
+
+---
+`;
+}
+
+// ═══════════════════════════════════════════════════
+//  Init
+// ═══════════════════════════════════════════════════
+(function init() {
+  // Load notes index
+  try {
+    const raw = localStorage.getItem(NOTES_INDEX_KEY);
+    notes = raw ? JSON.parse(raw) : [];
+  } catch(e) { notes = []; }
+
+  // Migrate legacy single-note storage (old md_editor_* keys)
+  const legacyKeys = Object.keys(localStorage).filter(k => k.startsWith('md_editor_'));
+  if (legacyKeys.length > 0 && notes.length === 0) {
+    legacyKeys.forEach(k => {
+      const name = k.replace('md_editor_', '') || 'Untitled';
+      const id   = genId();
+      notes.push({ id, name });
+      localStorage.setItem(noteContent(id), localStorage.getItem(k));
+      localStorage.removeItem(k);
+    });
+    saveIndex();
+  }
+
+  // Ensure at least one note exists
+  if (notes.length === 0) {
+    const id = genId();
+    notes.push({ id, name: 'README' });
+    saveIndex();
+    saveContent(id, DEFAULT_CONTENT('README'));
+  }
+
+  renderSidebar();
+  switchNote(notes[0].id);
+  btnWrap.classList.add('active');
+})();
+
+// Keep the gutter's wrapped-row measurements correct when the window
+// itself is resized (debounced to avoid thrashing on every pixel).
+let resizeTimer;
+window.addEventListener('resize', () => {
+  mirrorMetricsDirty = true;
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (wrapOn) updateLineNumbers(); }, 100);
+});
+
+// ═══════════════════════════════════════════════════
+//  Hotkeys modal
+// ═══════════════════════════════════════════════════
+function openHkModal() {
+  document.getElementById('hk-overlay').classList.add('open');
+  document.getElementById('hk-close').focus();
+}
+function closeHkModal() {
+  document.getElementById('hk-overlay').classList.remove('open');
+}
+</script>
+
+<!-- ── Hotkeys modal ── -->
+<div id="hk-overlay" onclick="if(event.target===this)closeHkModal()">
+  <div id="hk-modal" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+    <div id="hk-header">
+      <h2>⌨ Keyboard <span>shortcuts</span></h2>
+      <button id="hk-close" onclick="closeHkModal()" title="Close (Esc)">×</button>
+    </div>
+    <div id="hk-body">
+
+      <div class="hk-section-title">Formatting</div>
+      <div class="hk-grid">
+        <div class="hk-row"><span class="hk-desc">Bold</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>B</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Italic</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>I</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Strikethrough</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>D</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Inline code</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>`</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Heading 1</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>1</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Heading 2</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>2</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Heading 3</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>3</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Blockquote</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Q</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Code block</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>K</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Unordered list</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>U</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Ordered list</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>O</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Insert link</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>K</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Horizontal rule</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>H</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Indent (Tab)</span><span class="hk-keys"><kbd>Tab</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Outdent</span><span class="hk-keys"><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>Tab</kbd></span></div>
+      </div>
+
+      <div class="hk-section-title">File & editor</div>
+      <div class="hk-grid">
+        <div class="hk-row"><span class="hk-desc">Save now</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>S</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Download .md</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>S</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Export PDF</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>P</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Toggle word wrap</span><span class="hk-keys"><kbd>Alt</kbd><span class="hk-plus">+</span><kbd>Z</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Focus editor</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>E</kbd></span></div>
+      </div>
+
+      <div class="hk-section-title">Notes</div>
+      <div class="hk-grid">
+        <div class="hk-row"><span class="hk-desc">New note</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Alt</kbd><span class="hk-plus">+</span><kbd>N</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Toggle sidebar</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>\</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Next note</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>]</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Previous note</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>[</kbd></span></div>
+      </div>
+
+      <div class="hk-section-title">General</div>
+      <div class="hk-grid">
+        <div class="hk-row"><span class="hk-desc">Show this dialog</span><span class="hk-keys"><kbd>?</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Close dialog</span><span class="hk-keys"><kbd>Esc</kbd></span></div>
+      </div>
+
+    </div>
+    <div id="hk-footer">Press <kbd>?</kbd> anytime to open · <kbd>Esc</kbd> to close · Mac users: <kbd>⌘</kbd> instead of <kbd>Ctrl</kbd></div>
+  </div>
+</div>
+
+</body>
+</html>
