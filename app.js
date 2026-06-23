@@ -68,10 +68,10 @@ function createNote(name, content) {
   saveIndex();
   saveContent(id, content ?? DEFAULT_CONTENT(name));
   switchNote(id);
-  // Focus sidebar name input for immediate rename
+  // Trigger rename button so the new note name is immediately editable
   setTimeout(() => {
-    const nameInput = notesList.querySelector(`.note-item[data-id="${id}"] .note-name`);
-    if (nameInput) { nameInput.readOnly = false; nameInput.focus(); nameInput.select(); nameInput.closest('.note-item').classList.add('renaming'); }
+    const renameBtn = notesList.querySelector(`.note-item[data-id="${id}"] .note-rename`);
+    if (renameBtn) renameBtn.click();
   }, 50);
   return id;
 }
@@ -152,48 +152,49 @@ function renderSidebar() {
     item.className = 'note-item' + (note.id === activeId ? ' active' : '');
     item.dataset.id = note.id;
 
-    // Editable name
-    const nameEl = document.createElement('input');
-    nameEl.type = 'text';
+    // ── Name display (span) — swapped for an input only during rename ──
+    const nameEl = document.createElement('span');
     nameEl.className = 'note-name';
-    nameEl.value = note.name;
-    nameEl.spellcheck = false;
-    nameEl.readOnly = true;
-    nameEl.dataset.tip = 'Click to open · double-click or ✎ to rename';
+    nameEl.textContent = note.name;
+    nameEl.dataset.tip = 'Click to open · ✎ to rename';
+
+    item.addEventListener('click', e => {
+      // Ignore clicks on the rename button, delete button, tag pills, or the active rename input
+      if (e.target.closest('.note-rename, .note-delete, .note-tag-pill, .renaming-input')) return;
+      switchNote(note.id);
+    });
 
     function startRename() {
-      nameEl.readOnly = false;
+      // Replace the span with a real input
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'note-name renaming-input';
+      input.value = note.name;
+      input.spellcheck = false;
       item.classList.add('renaming');
-      nameEl.focus();
-      nameEl.select();
-    }
+      item.replaceChild(input, nameEl);
+      input.focus();
+      input.select();
 
-    function commitRename() {
-      nameEl.readOnly = true;
-      item.classList.remove('renaming');
-      note.name = nameEl.value.trim() || 'Untitled';
-      nameEl.value = note.name;
-      saveIndex();
-    }
-
-    // Single click → switch note (if not active); if already active, start rename
-    nameEl.addEventListener('click', e => {
-      if (note.id !== activeId) {
-        switchNote(note.id);
-      } else if (nameEl.readOnly) {
-        startRename();
+      function commit() {
+        note.name = input.value.trim() || 'Untitled';
+        saveIndex();
+        // Restore the span
+        nameEl.textContent = note.name;
+        item.classList.remove('renaming');
+        item.replaceChild(nameEl, input);
+        // Sync sidebar name across all items without full re-render
+        renderSidebar();
       }
-    });
-    // Double-click → rename regardless
-    nameEl.addEventListener('dblclick', e => { startRename(); });
 
-    nameEl.addEventListener('blur', commitRename);
-    nameEl.addEventListener('keydown', e => {
-      if (e.key === 'Enter')  { e.preventDefault(); nameEl.blur(); }
-      if (e.key === 'Escape') { nameEl.value = note.name; nameEl.readOnly = true; item.classList.remove('renaming'); nameEl.blur(); }
-    });
-    // Prevent sidebar-input typing from triggering editor shortcuts
-    nameEl.addEventListener('input', e => e.stopPropagation());
+      input.addEventListener('blur', commit);
+      input.addEventListener('keydown', e => {
+        e.stopPropagation();
+        if (e.key === 'Enter')  { e.preventDefault(); input.blur(); }
+        if (e.key === 'Escape') { input.value = note.name; input.blur(); }
+      });
+      input.addEventListener('input', e => e.stopPropagation());
+    }
 
     // Rename button (pencil)
     const renameBtn = makeSidebarButton(
@@ -631,9 +632,10 @@ function toggleHighlight() {
 //  Tag system
 // ═══════════════════════════════════════════════════
 const TAG_META = {
-  important: { label: '⚑ important', color: '#f85149', bg: 'rgba(248,81,73,0.13)', border: 'rgba(248,81,73,0.35)' },
+  fav: { label: '⚑ fav', color: '#f85149', bg: 'rgba(248,81,73,0.13)', border: 'rgba(248,81,73,0.35)' },
   todo:      { label: '☑ todo',      color: '#f2cc60', bg: 'rgba(242,204,96,0.13)', border: 'rgba(242,204,96,0.35)' },
   draft:     { label: '✎ draft',     color: '#79c0ff', bg: 'rgba(121,192,255,0.13)', border: 'rgba(121,192,255,0.35)' },
+  bug:       { label: '🐛 bug',       color: '#3fb950', bg: 'rgba(63,185,80,0.13)',   border: 'rgba(63,185,80,0.35)'   },
 };
 
 // Deterministic hue from tag name so the same free tag always looks the same.
