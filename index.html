@@ -241,6 +241,99 @@
     .note-item:hover .note-delete { opacity: 1; }
     .note-delete:hover { color: var(--red); background: #f8514920; }
 
+    /* ── Sidebar splitter ─────────────────────────────── */
+    #sidebar-splitter {
+      height: 5px;
+      background: var(--border);
+      cursor: row-resize;
+      flex-shrink: 0;
+      transition: background 0.15s;
+      position: relative;
+    }
+    #sidebar-splitter:hover,
+    #sidebar-splitter.dragging { background: var(--accent); }
+
+    /* ── TOC panel ────────────────────────────────────── */
+    #toc-panel {
+      display: flex;
+      flex-direction: column;
+      border-top: 1px solid var(--border);
+      min-height: 80px;
+      overflow: hidden;
+      transition: min-height 0.15s;
+    }
+    #toc-panel.toc-hidden {
+      display: none;
+    }
+
+    #toc-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 12px 5px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    #toc-header span {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    #btn-toc-toggle {
+      padding: 1px 6px;
+      font-size: 13px;
+      line-height: 1.4;
+      border-radius: 4px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-family: var(--mono);
+      transition: background 0.1s, color 0.1s;
+    }
+    #btn-toc-toggle:hover { background: var(--border); color: var(--text); }
+    #btn-toc-toggle.active { color: var(--accent); background: var(--accent-dim); }
+
+    #toc-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px 0 8px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--divider) transparent;
+    }
+    #toc-list::-webkit-scrollbar { width: 4px; }
+    #toc-list::-webkit-scrollbar-thumb { background: var(--divider); border-radius: 4px; }
+
+    .toc-item {
+      display: block;
+      font-family: var(--mono);
+      font-size: 11.5px;
+      color: var(--text-muted);
+      padding: 3px 10px;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      border-left: 2px solid transparent;
+      transition: color 0.1s, background 0.1s, border-color 0.1s;
+      text-decoration: none;
+    }
+    .toc-item:hover { color: var(--text); background: var(--border); }
+    .toc-item.toc-active { color: var(--accent); border-left-color: var(--accent); background: var(--accent-dim); }
+    .toc-h1 { padding-left: 10px; color: var(--text); font-weight: 600; }
+    .toc-h2 { padding-left: 18px; }
+    .toc-h3 { padding-left: 26px; font-size: 11px; color: var(--text-dim); }
+    .toc-h4, .toc-h5, .toc-h6 { padding-left: 34px; font-size: 10.5px; color: var(--text-dim); }
+    .toc-empty {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      padding: 10px 12px;
+      font-style: italic;
+    }
+
     /* ── Main editor area ─────────────────────────────── */
     #editor-area {
       display: flex;
@@ -381,7 +474,7 @@
       top: 0; left: 0;
       right: 0; bottom: 0;
       pointer-events: none;
-      overflow: hidden;        /* scrolled in sync via JS */
+      overflow: hidden;
       font-family: var(--mono);
       font-size: 13.5px;
       line-height: 1.7;
@@ -390,10 +483,10 @@
       word-break: break-word;
       overflow-wrap: break-word;
       tab-size: 2;
-      color: transparent;      /* base text invisible — spans add colour */
+      color: transparent;
       background: transparent;
       box-sizing: border-box;
-      z-index: 0;
+      z-index: 2;
     }
 
     #editor {
@@ -401,9 +494,9 @@
       z-index: 1;
       flex: 1;
       min-width: 0;
-      background: transparent;  /* show highlight layer beneath */
-      color: transparent;        /* hide plain text — highlight layer shows it */
-      caret-color: var(--text);  /* cursor stays visible */
+      background: transparent;
+      color: transparent;
+      caret-color: var(--text);
       font-family: var(--mono);
       font-size: 13.5px;
       line-height: 1.7;
@@ -416,9 +509,14 @@
       scrollbar-width: thin;
       scrollbar-color: var(--divider) transparent;
     }
-    #editor::selection { background: var(--accent-dim); }
+    /* Hide native selection — we render it in the overlay */
+    #editor::selection      { background: transparent; color: transparent; }
+    #editor::-moz-selection { background: transparent; color: transparent; }
     #editor::-webkit-scrollbar { width: 7px; }
     #editor::-webkit-scrollbar-thumb { background: var(--divider); border-radius: 4px; }
+
+    /* Selection spans rendered inside the overlay */
+    .md-sel { background: #1f4068; border-radius: 1px; }
 
     /* ── Markdown syntax colours ──────────────────────── */
     .md-h1         { color: #ff7b72; font-weight: 700; font-size: 1.18em; }
@@ -433,6 +531,7 @@
     .md-code       { color: #f0883e; background: #2d1f0e; border-radius: 3px; padding: 0 3px; }
     .md-codeblock  { color: #adbac7; }
     .md-codeblock-lang { color: #79c0ff; font-weight: 600; }
+    .md-codeblock-lang-mermaid { color: #bc8cff; font-weight: 600; }
     .md-blockquote { color: #bc8cff; border-left: none; }
     .md-link-text  { color: #58a6ff; }
     .md-link-url   { color: #3fb950; }
@@ -504,6 +603,30 @@
     #preview hr { border:none; border-top:1px solid var(--border); margin:24px 0; }
     #preview img { max-width:100%; border-radius:var(--radius); border:1px solid var(--border); }
     #preview input[type="checkbox"] { accent-color:var(--accent); margin-right:6px; }
+
+    /* ── Mermaid diagrams ─────────────────────────────── */
+    .mermaid-wrap {
+      margin: 16px 0;
+      padding: 20px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow-x: auto;
+      text-align: center;
+    }
+    .mermaid-wrap svg {
+      max-width: 100%;
+      height: auto;
+    }
+    .mermaid-error {
+      color: var(--red);
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 12px;
+      background: #f8514912;
+      border-radius: var(--radius);
+      border: 1px solid #f8514940;
+    }
     .hljs { background:transparent !important; }
 
     /* ── Print / PDF ──────────────────────────────────── */
@@ -819,6 +942,7 @@
 
     <!-- Toggle sidebar -->
     <button class="btn btn-icon active" id="btn-sidebar" data-tip="Toggle notes panel" onclick="toggleSidebar()">☰</button>
+    <button class="btn btn-icon active" id="btn-toc-toolbar" data-tip="Toggle table of contents" onclick="toggleToc()">§</button>
 
     <div class="toolbar-sep"></div>
 
@@ -850,6 +974,8 @@
     <div class="toolbar-sep"></div>
 
     <button class="btn" data-tip="Download .md"          onclick="downloadMd()">↓ .md</button>
+    <button class="btn" data-tip="Load .md file"         onclick="loadMd()">↑ .md</button>
+    <input type="file" id="md-file-input" accept=".md,.markdown,.txt" style="display:none" onchange="onMdFileLoad(event)" />
     <button class="btn" id="btn-pdf" data-tip="Export PDF" onclick="exportPdf()">↓ .pdf</button>
     <button class="btn" data-tip="Copy raw markdown"     onclick="copyRaw()">⎘ copy</button>
     <button class="btn" data-tip="Delete this note"      onclick="deleteCurrentNote()" style="color:var(--red)">✕ note</button>
@@ -881,6 +1007,17 @@
         <button id="btn-new-note" data-tip="New note" onclick="createNote()">+</button>
       </div>
       <div id="notes-list"></div>
+
+      <div id="sidebar-splitter"></div>
+
+      <!-- TOC panel -->
+      <div id="toc-panel">
+        <div id="toc-header">
+          <span>Contents</span>
+          <button id="btn-toc-toggle" data-tip="Toggle table of contents" onclick="toggleToc()">×</button>
+        </div>
+        <div id="toc-list"><span class="toc-empty">No headings yet</span></div>
+      </div>
     </div>
 
     <!-- ── Editor area ── -->
@@ -939,6 +1076,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+<!-- Mermaid diagrams -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.0/mermaid.min.js"></script>
 <!-- html2canvas + jsPDF for true PDF export -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1117,9 +1256,46 @@ function toggleSidebar() {
 }
 
 // ═══════════════════════════════════════════════════
+//  Mermaid init
+// ═══════════════════════════════════════════════════
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'dark',
+  darkMode: true,
+  themeVariables: {
+    background:      '#161b22',
+    primaryColor:    '#1f4068',
+    primaryTextColor:'#e6edf3',
+    primaryBorderColor:'#58a6ff',
+    lineColor:       '#58a6ff',
+    secondaryColor:  '#1c2128',
+    tertiaryColor:   '#21262d',
+    edgeLabelBackground:'#161b22',
+    clusterBkg:      '#1c2128',
+    titleColor:      '#e6edf3',
+    nodeTextColor:   '#e6edf3',
+  },
+  flowchart: { curve: 'basis' },
+  securityLevel: 'loose',
+});
+
+// ═══════════════════════════════════════════════════
 //  marked config
 // ═══════════════════════════════════════════════════
+
+// Custom renderer: turn ```mermaid blocks into placeholder divs
+const mermaidRenderer = new marked.Renderer();
+const originalCode = mermaidRenderer.code.bind(mermaidRenderer);
+mermaidRenderer.code = function(code, lang) {
+  if ((lang || '').trim().toLowerCase() === 'mermaid') {
+    const id = 'mmd-' + Math.random().toString(36).slice(2, 8);
+    return `<div class="mermaid-wrap"><div class="mermaid" id="${id}">${code}</div></div>`;
+  }
+  return originalCode(code, lang);
+};
+
 marked.setOptions({
+  renderer: mermaidRenderer,
   highlight(code, lang) {
     if (lang && hljs.getLanguage(lang)) return hljs.highlight(code, { language: lang }).value;
     return hljs.highlightAuto(code).value;
@@ -1134,9 +1310,12 @@ marked.setOptions({
 function render() {
   preview.innerHTML = marked.parse(editor.value);
   preview.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = false);
+  // Render Mermaid diagrams
+  mermaid.run({ nodes: preview.querySelectorAll('.mermaid') }).catch(() => {});
   updateStatus();
   updateLineNumbers();
   highlightEditor();
+  updateToc();
 }
 
 // ═══════════════════════════════════════════════════
@@ -1278,16 +1457,69 @@ function highlightEditor() {
     if (i < lines.length - 1) html += '\n';
   }
 
-  hlDiv.innerHTML = html;
-  // Keep overlay scroll in sync with textarea
+  // Inject selection highlight into the plain text before markup
+  const ss = editor.selectionStart, se = editor.selectionEnd;
+  if (ss !== se) {
+    const raw = editor.value;
+    // Build new html with selection markers injected at char positions
+    // Easier: rebuild from raw text with selection markers, then highlight
+    const before = raw.slice(0, ss);
+    const sel    = raw.slice(ss, se);
+    const after  = raw.slice(se);
+
+    const hlBefore = buildHtml(before);
+    const hlSel    = buildHtml(sel);
+    const hlAfter  = buildHtml(after);
+
+    hlDiv.innerHTML = hlBefore
+      + `<span class="md-sel">${hlSel}</span>`
+      + hlAfter;
+  } else {
+    hlDiv.innerHTML = html;
+  }
+
   hlDiv.scrollTop  = editor.scrollTop;
   hlDiv.scrollLeft = editor.scrollLeft;
+}
+
+function buildHtml(text) {
+  const lines = text.split('\n');
+  let html = '';
+  let inCode = false;
+  let codeLang = '';
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const fence = line.match(/^(`{3,})([\w-]*)/);
+    if (fence && !inCode) {
+      inCode = true; codeLang = fence[2];
+      html += `<span class="md-codeblock">` + esc(fence[0].slice(0, fence[1].length))
+            + `<span class="md-codeblock-lang">${esc(codeLang)}</span>`
+            + esc(line.slice(fence[1].length + codeLang.length)) + `</span>`;
+    } else if (inCode && fence) {
+      inCode = false; codeLang = '';
+      html += `<span class="md-codeblock">${esc(line)}</span>`;
+    } else if (inCode) {
+      html += `<span class="md-codeblock">${esc(line)}</span>`;
+    } else {
+      html += highlightLine(line);
+    }
+    if (i < lines.length - 1) html += '\n';
+  }
+  return html;
 }
 
 // Sync overlay scroll whenever the textarea scrolls
 editor.addEventListener('scroll', () => {
   hlDiv.scrollTop  = editor.scrollTop;
   hlDiv.scrollLeft = editor.scrollLeft;
+});
+
+// Re-render selection highlight on every selection change
+editor.addEventListener('mouseup',   highlightEditor);
+editor.addEventListener('keyup',     highlightEditor);
+editor.addEventListener('mousedown', highlightEditor);
+document.addEventListener('selectionchange', () => {
+  if (document.activeElement === editor) highlightEditor();
 });
 
 // ═══════════════════════════════════════════════════
@@ -1808,6 +2040,142 @@ function downloadMd() {
   a.download = (noteTitleEl.value.trim() || 'note') + '.md';
   a.click();
 }
+
+// ═══════════════════════════════════════════════════
+//  Load .md file
+// ═══════════════════════════════════════════════════
+function loadMd() {
+  document.getElementById('md-file-input').value = '';
+  document.getElementById('md-file-input').click();
+}
+
+function onMdFileLoad(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    // Create a new note with the filename (strip extension)
+    const name = file.name.replace(/\.(md|markdown|txt)$/i, '') || 'Imported';
+    const id = genId();
+    notes.push({ id, name });
+    saveIndex();
+    saveContent(id, ev.target.result);
+    renderSidebar();
+    switchNote(id);
+  };
+  reader.readAsText(file);
+}
+
+// ═══════════════════════════════════════════════════
+//  Table of Contents
+// ═══════════════════════════════════════════════════
+let tocVisible = true;
+
+function toggleToc() {
+  tocVisible = !tocVisible;
+  const panel = document.getElementById('toc-panel');
+  const btn   = document.getElementById('btn-toc-toggle');
+  const btnTb = document.getElementById('btn-toc-toolbar');
+  const splitter = document.getElementById('sidebar-splitter');
+  panel.classList.toggle('toc-hidden', !tocVisible);
+  splitter.style.display = tocVisible ? '' : 'none';
+  btn.textContent = tocVisible ? '×' : '§';
+  btn.classList.toggle('active', !tocVisible);
+  btnTb.classList.toggle('active', tocVisible);
+}
+
+function updateToc() {
+  const tocList = document.getElementById('toc-list');
+  if (!tocList) return;
+
+  const lines = editor.value.split('\n');
+  const headings = [];
+  let inCode = false;
+
+  lines.forEach((line, i) => {
+    if (/^`{3,}/.test(line)) { inCode = !inCode; return; }
+    if (inCode) return;
+    const m = line.match(/^(#{1,6})\s+(.+)/);
+    if (m) headings.push({ level: m[1].length, text: m[2].trim(), line: i });
+  });
+
+  if (headings.length === 0) {
+    tocList.innerHTML = '<span class="toc-empty">No headings yet</span>';
+    return;
+  }
+
+  tocList.innerHTML = headings.map(h => {
+    const indent = `toc-h${h.level}`;
+    return `<a class="toc-item ${indent}" data-line="${h.line}" onclick="tocJump(${h.line})" title="${h.text}">${h.text}</a>`;
+  }).join('');
+}
+
+function tocJump(lineIndex) {
+  const lines = editor.value.split('\n');
+  let charPos = 0;
+  for (let i = 0; i < lineIndex; i++) charPos += lines[i].length + 1;
+
+  editor.focus();
+  editor.setSelectionRange(charPos, charPos);
+
+  // Scroll editor to that line
+  const lineHeight = parseFloat(getComputedStyle(editor).lineHeight);
+  editor.scrollTop = lineIndex * lineHeight - editor.clientHeight / 3;
+
+  // Also scroll preview to matching heading
+  const headings = preview.querySelectorAll('h1,h2,h3,h4,h5,h6');
+  let hIdx = 0;
+  const lines2 = editor.value.split('\n');
+  let inCode = false;
+  for (let i = 0; i < lineIndex; i++) {
+    if (/^`{3,}/.test(lines2[i])) { inCode = !inCode; continue; }
+    if (!inCode && /^#{1,6}\s/.test(lines2[i])) hIdx++;
+  }
+  if (headings[hIdx]) headings[hIdx].scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Highlight active TOC item
+  document.querySelectorAll('.toc-item').forEach(el => el.classList.remove('toc-active'));
+  const active = document.querySelector(`.toc-item[data-line="${lineIndex}"]`);
+  if (active) active.classList.add('toc-active');
+}
+
+// ── Sidebar TOC splitter drag ──────────────────────
+(function() {
+  const splitter  = document.getElementById('sidebar-splitter');
+  const notesList = document.getElementById('notes-list');
+  const tocPanel  = document.getElementById('toc-panel');
+  let dragging = false;
+  let startY, startNotesH, startTocH;
+
+  splitter.addEventListener('mousedown', e => {
+    dragging = true;
+    startY = e.clientY;
+    startNotesH = notesList.offsetHeight;
+    startTocH   = tocPanel.offsetHeight;
+    splitter.classList.add('dragging');
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'row-resize';
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const dy = e.clientY - startY;
+    const newNotesH = Math.max(60, startNotesH + dy);
+    const newTocH   = Math.max(60, startTocH   - dy);
+    notesList.style.flex = 'none';
+    notesList.style.height = newNotesH + 'px';
+    tocPanel.style.flex = 'none';
+    tocPanel.style.height = newTocH + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    splitter.classList.remove('dragging');
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+  });
+})();
 
 
 function copyRaw() {
