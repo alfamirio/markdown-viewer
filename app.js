@@ -116,6 +116,7 @@ function switchNote(id) {
   render();
   markSaved();
   renderSidebar();
+  updateTagButtons();
   editor.scrollTop = 0;
   preview.scrollTop = 0;
   saveConfig();
@@ -215,6 +216,24 @@ function renderSidebar() {
     item.appendChild(nameEl);
     item.appendChild(renameBtn);
     item.appendChild(deleteBtn);
+
+    // Tag pills — appended after the name row so they flow below it
+    if (Array.isArray(note.tags) && note.tags.length) {
+      const pillsRow = document.createElement('div');
+      pillsRow.className = 'note-tags';
+      note.tags.forEach(tag => {
+        const m = freeTagStyle(tag);
+        const pill = document.createElement('span');
+        pill.className = 'note-tag-pill';
+        pill.style.color       = m.color;
+        pill.style.background  = m.bg;
+        pill.style.borderColor = m.border;
+        pill.title = tag;
+        pill.textContent = tag;
+        pillsRow.appendChild(pill);
+      });
+      item.appendChild(pillsRow);
+    }
     notesList.appendChild(item);
   });
 }
@@ -609,6 +628,152 @@ function toggleHighlight() {
 }
 
 // ═══════════════════════════════════════════════════
+//  Tag system
+// ═══════════════════════════════════════════════════
+const TAG_META = {
+  important: { label: '⚑ important', color: '#f85149', bg: 'rgba(248,81,73,0.13)', border: 'rgba(248,81,73,0.35)' },
+  todo:      { label: '☑ todo',      color: '#f2cc60', bg: 'rgba(242,204,96,0.13)', border: 'rgba(242,204,96,0.35)' },
+  draft:     { label: '✎ draft',     color: '#79c0ff', bg: 'rgba(121,192,255,0.13)', border: 'rgba(121,192,255,0.35)' },
+};
+
+// Deterministic hue from tag name so the same free tag always looks the same.
+// Palette of 8 muted-but-readable hues that sit well on the dark theme.
+const FREE_TAG_PALETTE = [
+  { color: '#7ee787', bg: 'rgba(126,231,135,0.13)', border: 'rgba(126,231,135,0.35)' }, // green
+  { color: '#d2a8ff', bg: 'rgba(210,168,255,0.13)', border: 'rgba(210,168,255,0.35)' }, // purple
+  { color: '#ffa657', bg: 'rgba(255,166,87,0.13)',  border: 'rgba(255,166,87,0.35)'  }, // orange
+  { color: '#79c0ff', bg: 'rgba(121,192,255,0.13)', border: 'rgba(121,192,255,0.35)' }, // blue
+  { color: '#f2cc60', bg: 'rgba(242,204,96,0.13)',  border: 'rgba(242,204,96,0.35)'  }, // yellow
+  { color: '#3fb950', bg: 'rgba(63,185,80,0.13)',   border: 'rgba(63,185,80,0.35)'   }, // dark-green
+  { color: '#ff7b72', bg: 'rgba(255,123,114,0.13)', border: 'rgba(255,123,114,0.35)' }, // red
+  { color: '#a5d6ff', bg: 'rgba(165,214,255,0.13)', border: 'rgba(165,214,255,0.35)' }, // light-blue
+];
+
+function freeTagStyle(tag) {
+  if (TAG_META[tag]) return TAG_META[tag];
+  // Simple djb2-like hash → palette index
+  let h = 5381;
+  for (let i = 0; i < tag.length; i++) h = ((h << 5) + h) ^ tag.charCodeAt(i);
+  return FREE_TAG_PALETTE[Math.abs(h) % FREE_TAG_PALETTE.length];
+}
+
+function getActiveTags() {
+  const note = notes.find(n => n.id === activeId);
+  return (note && Array.isArray(note.tags)) ? note.tags : [];
+}
+
+function toggleTag(tag) {
+  const note = notes.find(n => n.id === activeId);
+  if (!note) return;
+  if (!Array.isArray(note.tags)) note.tags = [];
+  const idx = note.tags.indexOf(tag);
+  if (idx === -1) note.tags.push(tag);
+  else note.tags.splice(idx, 1);
+  saveIndex();
+  updateTagButtons();
+  renderSidebar();
+}
+
+function addFreeTag(raw) {
+  const tag = raw.trim().toLowerCase().replace(/[,;\s]+/g, '-').replace(/[^a-z0-9\-_]/g, '').slice(0, 32);
+  if (!tag) return;
+  const note = notes.find(n => n.id === activeId);
+  if (!note) return;
+  if (!Array.isArray(note.tags)) note.tags = [];
+  if (!note.tags.includes(tag)) {
+    note.tags.push(tag);
+    saveIndex();
+    updateTagButtons();
+    renderSidebar();
+  }
+}
+
+function removeFreeTag(tag) {
+  const note = notes.find(n => n.id === activeId);
+  if (!note || !Array.isArray(note.tags)) return;
+  const idx = note.tags.indexOf(tag);
+  if (idx !== -1) note.tags.splice(idx, 1);
+  saveIndex();
+  updateTagButtons();
+  renderSidebar();
+}
+
+function updateTagButtons() {
+  const active = getActiveTags();
+
+  // ── Preset buttons ───────────────────────────────
+  Object.keys(TAG_META).forEach(tag => {
+    const btn = document.getElementById('tag-btn-' + tag);
+    if (!btn) return;
+    const on = active.includes(tag);
+    const m  = TAG_META[tag];
+    btn.classList.toggle('tag-active', on);
+    if (on) {
+      btn.style.color       = m.color;
+      btn.style.background  = m.bg;
+      btn.style.borderColor = m.border;
+      btn.style.opacity     = '1';
+    } else {
+      btn.style.color       = '';
+      btn.style.background  = '';
+      btn.style.borderColor = '';
+      btn.style.opacity     = '';
+    }
+  });
+
+  // ── Free-tag chips in the toolbar input area ─────
+  const chipsEl = document.getElementById('tag-chips');
+  if (!chipsEl) return;
+  chipsEl.innerHTML = '';
+  active.filter(t => !TAG_META[t]).forEach(tag => {
+    const m = freeTagStyle(tag);
+    const chip = document.createElement('span');
+    chip.className = 'tag-chip';
+    chip.style.color       = m.color;
+    chip.style.background  = m.bg;
+    chip.style.borderColor = m.border;
+    chip.textContent = tag;
+    const x = document.createElement('button');
+    x.className = 'tag-chip-remove';
+    x.textContent = '×';
+    x.title = 'Remove tag';
+    x.addEventListener('mousedown', e => { e.preventDefault(); removeFreeTag(tag); });
+    chip.appendChild(x);
+    chipsEl.appendChild(chip);
+  });
+}
+
+// ── Tag input wiring ─────────────────────────────
+(function wireTagInput() {
+  // Defer until DOM is ready (this runs inside boot() which fires after cm-ready)
+  const input = document.getElementById('tag-input');
+  const wrap  = document.getElementById('tag-input-wrap');
+  if (!input || !wrap) return;
+
+  // Prevent editor shortcuts from firing while typing tags
+  input.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const val = input.value.replace(/,/g, '');
+      addFreeTag(val);
+      input.value = '';
+      return;
+    }
+    if (e.key === 'Backspace' && input.value === '') {
+      // Remove the last free tag on backspace when input is empty
+      const free = getActiveTags().filter(t => !TAG_META[t]);
+      if (free.length) removeFreeTag(free[free.length - 1]);
+    }
+  });
+  input.addEventListener('input', e => e.stopPropagation());
+  // Clicking anywhere in the wrap focuses the input
+  wrap.addEventListener('mousedown', e => {
+    if (e.target !== input) { e.preventDefault(); input.focus(); }
+  });
+})();
+
+// ═══════════════════════════════════════════════════
 //  PDF / Download
 // ═══════════════════════════════════════════════════
 function printFallback() {
@@ -941,10 +1106,11 @@ function exportJson() {
   const payload = {
     exportedAt: new Date().toISOString(),
     version: 1,
-    notes: notes.map(({ id, name, createdAt }) => ({
+    notes: notes.map(({ id, name, createdAt, tags }) => ({
       id,
       name,
       createdAt: createdAt ?? null,
+      tags: tags ?? [],
       content: loadContent(id),
     })),
   };
@@ -983,7 +1149,7 @@ function onFileLoad(e) {
       payload.notes.forEach(n => {
         if (typeof n.name !== 'string' || typeof n.content !== 'string') return;
         const id = genId();
-        notes.push({ id, name: n.name || 'Untitled', createdAt: n.createdAt ?? new Date().toISOString() });
+        notes.push({ id, name: n.name || 'Untitled', createdAt: n.createdAt ?? new Date().toISOString(), tags: Array.isArray(n.tags) ? n.tags : [] });
         saveContent(id, n.content);
         if (!firstImportedId) firstImportedId = id;
       });
@@ -1704,7 +1870,7 @@ Object.assign(window, {
   closeHkModal, copyRaw, createNote, dismissWarning, downloadMd, exportHtml, exportJson, exportPdf,
   fmt, fmtBlock, fmtLine, insertLink, insertText, loadFile, onFileLoad, openHkModal,
   resetAllData, setViewMode, tocJump, toggleHighlight, toggleSidebar,
-  toggleToc, toggleWrap, toggleSyncScroll,
+  toggleToc, toggleWrap, toggleSyncScroll, toggleTag, addFreeTag, removeFreeTag,
 });
 
 // ═══════════════════════════════════════════════════

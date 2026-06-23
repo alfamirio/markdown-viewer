@@ -113,6 +113,18 @@
       <button class="btn" data-tip="Heading 2" onclick="fmtLine('## ')">H2</button>
       <button class="btn" data-tip="Heading 3" onclick="fmtLine('### ')">H3</button>
 
+      <div class="toolbar-sep"></div>
+
+      <span class="toolbar-tags-label">tags:</span>
+      <button class="btn tag-btn" id="tag-btn-important" data-tip="Toggle 'important' tag" onclick="toggleTag('important')">⚑ important</button>
+      <button class="btn tag-btn" id="tag-btn-todo"      data-tip="Toggle 'todo' tag"      onclick="toggleTag('todo')">☑ todo</button>
+      <button class="btn tag-btn" id="tag-btn-draft"     data-tip="Toggle 'draft' tag"     onclick="toggleTag('draft')">✎ draft</button>
+
+      <div id="tag-input-wrap" data-tip="Add a custom tag — Enter or comma to confirm">
+        <div id="tag-chips"></div>
+        <input id="tag-input" type="text" placeholder="+ tag" spellcheck="false" autocomplete="off" />
+      </div>
+
     </div>
 
   </div>
