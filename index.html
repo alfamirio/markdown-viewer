@@ -9,20 +9,20 @@
 
     /* ── Tokens ───────────────────────────────────────── */
     :root {
-      --bg:        #ffffff;
-      --surface:   #f6f8fa;
-      --surface2:  #f0f2f5;
-      --border:    #d0d7de;
-      --divider:   #c8d0d9;
-      --accent:    #0969da;
-      --accent-dim:#dbeafe;
-      --text:      #1f2328;
-      --text-muted:#656d76;
-      --text-dim:  #9ba3ab;
-      --green:     #1a7f37;
-      --orange:    #9a6700;
-      --red:       #d1242f;
-      --code-bg:   #f0f2f5;
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --surface2:  #1c2128;
+      --border:    #30363d;
+      --divider:   #21262d;
+      --accent:    #58a6ff;
+      --accent-dim:#1f3a5f;
+      --text:      #e6edf3;
+      --text-muted:#8b949e;
+      --text-dim:  #484f58;
+      --green:     #3fb950;
+      --orange:    #d29922;
+      --red:       #f85149;
+      --code-bg:   #161b22;
       --radius:    6px;
       --mono:      'JetBrains Mono', 'Fira Code', monospace;
       --sans:      'Inter', system-ui, sans-serif;
@@ -539,7 +539,7 @@
     #preview blockquote p { margin:0; }
     #preview code {
       font-family:var(--mono); font-size:.88em; background:var(--code-bg);
-      border:1px solid var(--border); border-radius:4px; padding:1px 6px; color:#f0883e;
+      border:1px solid var(--border); border-radius:4px; padding:1px 6px; color:#ffa657;
     }
     #preview pre {
       background:var(--code-bg); border:1px solid var(--border); border-radius:var(--radius);
@@ -562,7 +562,7 @@
     #preview table { border-collapse:collapse; width:100%; margin-bottom:16px; font-size:13.5px; }
     #preview th,#preview td { border:1px solid var(--border); padding:7px 14px; text-align:left; }
     #preview th { background:var(--code-bg); font-weight:600; color:var(--text-muted); }
-    #preview tr:nth-child(even) { background:#f6f8fa; }
+    #preview tr:nth-child(even) { background:#1c2128; }
     #preview hr { border:none; border-top:1px solid var(--border); margin:24px 0; }
     #preview img { max-width:100%; border-radius:var(--radius); border:1px solid var(--border); }
     #preview input[type="checkbox"] { accent-color:var(--accent); margin-right:6px; }
@@ -639,7 +639,7 @@
       display: none;
       align-items: center;
       gap: 9px;
-      box-shadow: 0 8px 20px #0002;
+      box-shadow: 0 8px 20px #00000066;
     }
     #pdf-progress.show { display: flex; }
     #pdf-progress .spin {
@@ -657,7 +657,7 @@
       position: fixed;
       top: 0; left: -99999px;
       width: 760px;
-      background: #fff;
+      background: #0d1117;
       z-index: -1;
     }
 
@@ -699,7 +699,7 @@
       display: none;
       position: fixed;
       inset: 0;
-      background: #00000055;
+      background: #00000099;
       backdrop-filter: blur(3px);
       z-index: 200;
       align-items: center;
@@ -716,7 +716,7 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      box-shadow: 0 24px 64px #0002;
+      box-shadow: 0 24px 64px #00000088;
       animation: modal-in 0.15s ease;
     }
     @keyframes modal-in {
