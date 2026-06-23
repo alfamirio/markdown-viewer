@@ -1142,6 +1142,8 @@
       <button class="btn" data-tip="Keyboard shortcuts  ?" onclick="openHkModal()">? keys</button>
 
       <div id="status">
+        <span id="storage-count" class="stat">0% (0 KB)</span>
+        <span class="stat-sep">·</span>
         <span id="word-count" class="stat">0 words</span>
         <span class="stat-sep">·</span>
         <span id="line-count" class="stat">0 lines</span>
@@ -1607,6 +1609,7 @@ function saveIndex() {
 function saveContent(id, text) {
   try {
     localStorage.setItem(noteContent(id), text);
+    updateLocalStorageUsage();
   } catch(e) {
     // Stop the autosave timer — no point retrying when storage is full.
     clearTimeout(saveTimer);
@@ -1660,6 +1663,7 @@ function deleteNote(id) {
   // Switch to adjacent note
   const nextIdx = Math.min(idx, notes.length - 1);
   switchNote(notes[nextIdx].id);
+  updateLocalStorageUsage();
 }
 
 function deleteCurrentNote() {
@@ -2944,7 +2948,37 @@ function resetAllData() {
     .filter(k => k.startsWith('md_note_') || k.startsWith('md_editor_'))
     .forEach(k => localStorage.removeItem(k));
   localStorage.removeItem('md_warning_dismissed');
+  updateLocalStorageUsage();
   location.reload();
+}
+
+function updateLocalStorageUsage() {
+  let totalBytes = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    const value = localStorage.getItem(key);
+    // En UTF-16 cada carácter ocupa 2 bytes
+    totalBytes += (key.length + value.length) * 2;
+  }
+
+  // Límite estimado de 5MB en bytes (5 * 1024 * 1024)
+  const maxBytes = 5242880; 
+  const percentage = ((totalBytes / maxBytes) * 100).toFixed(1);
+  const sizeInKB = (totalBytes / 1024).toFixed(1);
+
+  const storageElem = document.getElementById('storage-count');
+  if (storageElem) {
+    storageElem.textContent = `${percentage}% (${sizeInKB} KB)`;
+    
+    // Cambiar color de advertencia según el uso
+    if (percentage > 90) {
+      storageElem.style.color = 'var(--red)';
+    } else if (percentage > 70) {
+      storageElem.style.color = 'var(--orange)';
+    } else {
+      storageElem.style.color = 'var(--text-muted)';
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -3050,6 +3084,8 @@ function dismissWarning() {
     // (warning footer: show unless user has explicitly dismissed it)
 
   } catch(e) {}
+
+  updateLocalStorageUsage();
 
   // Show warning footer unless user has previously dismissed it
   if (!localStorage.getItem('md_warning_dismissed')) {
