@@ -1814,110 +1814,250 @@ function pdfProgress(show, text) {
   if (text) document.getElementById('pdf-progress-text').textContent = text;
 }
 
-// Builds a clean, light, print-ready copy of the rendered markdown
-// Render a Mermaid diagram string to a PNG data-URL using mermaid.render()
-// which works entirely without needing visible DOM elements.
+// ── Mermaid → PNG data-URL ────────────────────────────────────────────────
 async function mermaidToDataURL(code, id) {
-  // Use neutral theme for white PDF background
   const { svg } = await mermaid.render(id, code);
-
-  // Parse the SVG to extract width/height
   const parser = new DOMParser();
   const doc = parser.parseFromString(svg, 'image/svg+xml');
   const svgEl = doc.querySelector('svg');
-
   let w = parseFloat(svgEl.getAttribute('width'))  || 0;
   let h = parseFloat(svgEl.getAttribute('height')) || 0;
-
-  // Mermaid sometimes uses max-width style instead of attributes
   if (!w || !h) {
-    const vb = svgEl.getAttribute('viewBox');
-    if (vb) {
-      const parts = vb.split(/\s+|,/);
-      w = parseFloat(parts[2]) || 648;
-      h = parseFloat(parts[3]) || 300;
-    }
+    const vb = (svgEl.getAttribute('viewBox') || '').split(/[\s,]+/);
+    w = parseFloat(vb[2]) || 500; h = parseFloat(vb[3]) || 300;
   }
-
-  // Clamp to page width (648 = 760 - 2*56 padding)
-  const maxW = 648;
-  if (w > maxW) { h = h * (maxW / w); w = maxW; }
-
-  // Stamp explicit size so the browser renders it correctly
-  svgEl.setAttribute('width',  w);
-  svgEl.setAttribute('height', h);
-
-  const svgStr  = new XMLSerializer().serializeToString(svgEl);
-  const encoded = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
-
-  // Draw onto a canvas so html2canvas gets a raster image
-  return new Promise((resolve) => {
+  const maxW = 470;
+  if (w > maxW) { h = h * maxW / w; w = maxW; }
+  svgEl.setAttribute('width', w); svgEl.setAttribute('height', h);
+  const svgStr  = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svgEl));
+  return new Promise(resolve => {
     const img = new Image();
     img.onload = () => {
-      const scale = 2;
-      const cv = document.createElement('canvas');
-      cv.width  = w * scale;
-      cv.height = h * scale;
+      const sc = 2, cv = document.createElement('canvas');
+      cv.width = w * sc; cv.height = h * sc;
       const ctx = cv.getContext('2d');
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.fillStyle = '#fff'; ctx.fillRect(0,0,cv.width,cv.height);
       ctx.drawImage(img, 0, 0, cv.width, cv.height);
       resolve({ dataURL: cv.toDataURL('image/png'), w, h });
     };
     img.onerror = () => resolve(null);
-    img.src = encoded;
+    img.src = svgStr;
   });
 }
 
-// inside the off-screen #pdf-render-root, ready for rasterization.
-async function buildPdfDom() {
-  const root = document.getElementById('pdf-render-root');
-  root.innerHTML = '';
+// ── Text-based PDF export — produces selectable text ─────────────────────
+async function exportPdf() {
+  if (typeof window.jspdf === 'undefined') { printFallback(); return; }
 
-  const page = document.createElement('div');
-  page.style.cssText = `
-    width: 760px;
-    padding: 0 56px;
-    background: #ffffff;
-    color: #1a1a1a;
-    font-family: 'Inter', system-ui, sans-serif;
-    font-size: 12px;
-    line-height: 1.6;
-    box-sizing: border-box;
-  `;
+  const btn = document.getElementById('btn-pdf');
+  btn.classList.add('printing');
+  pdfProgress(true, 'Building PDF…');
 
-  const body = document.createElement('div');
-  body.innerHTML = marked.parse(editor.value);
-  body.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.disabled = true; });
-  page.appendChild(body);
-  root.appendChild(page);
+  try {
+    const title = noteTitleEl.value.trim() || 'note';
+    const { jsPDF } = window.jspdf;
 
-  // Replace each .mermaid div with a pre-rasterised <img> so html2canvas
-  // never has to deal with SVG at all.
-  mermaid.initialize({ theme: 'neutral', startOnLoad: false, securityLevel: 'loose',
-    flowchart: { curve: 'basis' } });
+    const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
+    const PW = pdf.internal.pageSize.getWidth();
+    const PH = pdf.internal.pageSize.getHeight();
+    const ML = 56, MR = 56, MT = 52, MB = 52;
+    const CW = PW - ML - MR;
+    let y = MT;
 
-  const wraps = Array.from(body.querySelectorAll('.mermaid-wrap'));
-  for (const wrap of wraps) {
-    const mmdDiv = wrap.querySelector('.mermaid');
-    if (!mmdDiv) continue;
-    const code = mmdDiv.textContent.trim();
-    const uid  = 'pdfmmd-' + Math.random().toString(36).slice(2, 9);
-    try {
-      const result = await mermaidToDataURL(code, uid);
-      if (result) {
-        const img = document.createElement('img');
-        img.src = result.dataURL;
-        img.style.cssText = `display:block;width:${result.w}px;max-width:100%;height:auto;margin:12px auto;border-radius:4px;`;
-        wrap.replaceChildren(img);
-      }
-    } catch(e) {
-      // Leave as-is if rendering fails
-      console.warn('Mermaid PDF render failed:', e);
+    mermaid.initialize({ theme: 'neutral', startOnLoad: false,
+      securityLevel: 'loose', flowchart: { curve: 'basis' } });
+
+    function newPageIfNeeded(needed) {
+      if (y + needed > PH - MB) { pdf.addPage(); y = MT; }
     }
+
+    function setFont(bold, italic, size, hexColor) {
+      const style = bold && italic ? 'bolditalic' : bold ? 'bold' : italic ? 'italic' : 'normal';
+      pdf.setFont('helvetica', style);
+      pdf.setFontSize(size);
+      if (hexColor) {
+        pdf.setTextColor(parseInt(hexColor.slice(1,3),16), parseInt(hexColor.slice(3,5),16), parseInt(hexColor.slice(5,7),16));
+      }
+    }
+
+    function setFontMono(size) {
+      pdf.setFont('courier', 'normal'); pdf.setFontSize(size); pdf.setTextColor(26,26,26);
+    }
+
+    function fillRect(x, ry, w, h, hex) {
+      pdf.setFillColor(parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16));
+      pdf.rect(x, ry, w, h, 'F');
+    }
+
+    function strokeLine(x1, ry, x2, hex) {
+      pdf.setDrawColor(parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16));
+      pdf.setLineWidth(0.5); pdf.line(x1, ry, x2, ry);
+    }
+
+    function plain(el) { return (el.textContent || '').replace(/\s+/g, ' ').trim(); }
+
+    function writeWrapped(text, x, maxW, bold, italic, size, hex, afterGap) {
+      setFont(bold, italic, size, hex);
+      const lines = pdf.splitTextToSize(text, maxW);
+      const lh = size * 1.45;
+      for (const line of lines) { newPageIfNeeded(lh); pdf.text(line, x, y); y += lh; }
+      y += (afterGap || 0);
+    }
+
+    async function renderDataURLImage(dataURL, imgW, imgH) {
+      const maxW = CW, maxH = PH - MT - MB - 20;
+      if (imgW > maxW) { imgH = imgH * maxW / imgW; imgW = maxW; }
+      if (imgH > maxH) { imgW = imgW * maxH / imgH; imgH = maxH; }
+      newPageIfNeeded(imgH + 12);
+      pdf.addImage(dataURL, 'PNG', ML + (CW - imgW) / 2, y, imgW, imgH);
+      y += imgH + 12;
+    }
+
+    async function renderBlock(el) {
+      const tag = el.tagName ? el.tagName.toLowerCase() : '';
+
+      if (/^h[1-6]$/.test(tag)) {
+        const level = parseInt(tag[1]);
+        const sz = [20, 16, 13.5, 12, 11.5, 11][level - 1];
+        y += level <= 2 ? 14 : 8;
+        newPageIfNeeded(sz * 1.8);
+        writeWrapped(plain(el), ML, CW, true, false, sz, '#111111', 0);
+        if (level <= 2) { strokeLine(ML, y + 1, ML + CW, '#d1d5db'); y += 8; }
+        else y += 4;
+        return;
+      }
+
+      if (tag === 'p') {
+        const imgs = el.querySelectorAll('img');
+        if (imgs.length && !el.textContent.trim()) {
+          for (const img of imgs) await renderImgEl(img); return;
+        }
+        writeWrapped(plain(el), ML, CW, false, false, 11, '#1a1a1a', 6);
+        return;
+      }
+
+      if (tag === 'hr') {
+        y += 8; newPageIfNeeded(4);
+        strokeLine(ML, y, ML + CW, '#d1d5db'); y += 12;
+        return;
+      }
+
+      if (tag === 'blockquote') {
+        setFont(false, false, 10.5, '#374151');
+        const lines = pdf.splitTextToSize(plain(el), CW - 16);
+        const lh = 10.5 * 1.45, bh = lines.length * lh + 12;
+        newPageIfNeeded(bh);
+        fillRect(ML, y, 3, bh, '#9ca3af');
+        fillRect(ML + 3, y, CW - 3, bh, '#f9fafb');
+        y += 7;
+        for (const line of lines) { pdf.text(line, ML + 12, y); y += lh; }
+        y += 10; return;
+      }
+
+      if (tag === 'pre') {
+        const text = el.textContent || '';
+        setFontMono(9);
+        const lines = pdf.splitTextToSize(text, CW - 18);
+        const lh = 9 * 1.5, bh = lines.length * lh + 16;
+        newPageIfNeeded(Math.min(bh, 80)); // require at least 80pt before starting
+        const startY = y;
+        fillRect(ML, y, CW, bh, '#f3f4f6');
+        pdf.setDrawColor(200,200,200); pdf.setLineWidth(0.4); pdf.rect(ML, y, CW, bh, 'S');
+        y += 9;
+        for (const line of lines) {
+          if (y + lh > PH - MB) { pdf.addPage(); fillRect(ML, MT, CW, PH - MT - MB, '#f3f4f6'); y = MT + 9; }
+          setFontMono(9); pdf.text(line, ML + 9, y); y += lh;
+        }
+        y += 9; return;
+      }
+
+      if (tag === 'ul' || tag === 'ol') {
+        let idx = 1;
+        for (const li of el.children) {
+          if (li.tagName.toLowerCase() !== 'li') continue;
+          setFont(false, false, 11, '#1a1a1a');
+          const bullet = tag === 'ul' ? '•' : (idx++) + '.';
+          const lines = pdf.splitTextToSize(plain(li), CW - 16);
+          const lh = 11 * 1.45;
+          newPageIfNeeded(lh);
+          pdf.text(bullet, ML + 4, y);
+          for (const line of lines) { newPageIfNeeded(lh); pdf.text(line, ML + 15, y); y += lh; }
+          y += 1;
+        }
+        y += 4; return;
+      }
+
+      if (tag === 'table') {
+        const rows = Array.from(el.querySelectorAll('tr'));
+        if (!rows.length) return;
+        const cols = rows[0].querySelectorAll('th,td').length || 1;
+        const colW = CW / cols, rh = 22;
+        for (let ri = 0; ri < rows.length; ri++) {
+          const cells = rows[ri].querySelectorAll('th,td');
+          const isHead = ri === 0 && rows[ri].parentElement.tagName.toLowerCase() === 'thead';
+          newPageIfNeeded(rh);
+          if (isHead) fillRect(ML, y, CW, rh, '#f3f4f6');
+          else if (ri % 2 === 0) fillRect(ML, y, CW, rh, '#f9fafb');
+          pdf.setDrawColor(200,200,200); pdf.setLineWidth(0.3); pdf.rect(ML, y, CW, rh, 'S');
+          setFont(isHead, false, 9.5, isHead ? '#374151' : '#1a1a1a');
+          for (let ci = 0; ci < cells.length; ci++) {
+            const txt = pdf.splitTextToSize(plain(cells[ci]), colW - 10);
+            pdf.text(txt[0] || '', ML + ci * colW + 5, y + rh * 0.65);
+          }
+          y += rh;
+        }
+        y += 8; return;
+      }
+
+      if (tag === 'div' && el.classList.contains('mermaid-wrap')) {
+        const mmdEl = el.querySelector('.mermaid');
+        if (!mmdEl) return;
+        pdfProgress(true, 'Rendering diagram…');
+        const uid = 'pdfmmd-' + Math.random().toString(36).slice(2,9);
+        try {
+          const result = await mermaidToDataURL(mmdEl.textContent.trim(), uid);
+          if (result) await renderDataURLImage(result.dataURL, result.w, result.h);
+        } catch(e) { console.warn('Mermaid render failed', e); }
+        pdfProgress(true, 'Building PDF…');
+        return;
+      }
+
+      if (tag === 'img') { await renderImgEl(el); return; }
+
+      for (const child of el.children) await renderBlock(child);
+    }
+
+    async function renderImgEl(imgEl) {
+      const src = imgEl.src || imgEl.getAttribute('src');
+      if (!src) return;
+      try {
+        const loaded = await new Promise((res, rej) => {
+          const i = new Image(); i.crossOrigin = 'anonymous';
+          i.onload = () => res(i); i.onerror = rej; i.src = src;
+        });
+        const cv = document.createElement('canvas');
+        cv.width = loaded.naturalWidth; cv.height = loaded.naturalHeight;
+        cv.getContext('2d').drawImage(loaded, 0, 0);
+        await renderDataURLImage(cv.toDataURL('image/png'), loaded.naturalWidth, loaded.naturalHeight);
+      } catch(e) {}
+    }
+
+    pdfProgress(true, 'Rendering content…');
+    const container = document.createElement('div');
+    container.innerHTML = marked.parse(editor.value);
+    for (const child of container.children) await renderBlock(child);
+
+    pdfProgress(true, 'Saving…');
+    pdf.save(title + '.pdf');
+
+  } catch (err) {
+    console.error('PDF export failed:', err);
+    pdfProgress(false);
+    if (confirm('PDF export failed. Use the browser print dialog instead?')) printFallback();
+    btn.classList.remove('printing');
+    return;
   }
 
-  // Restore dark theme for the live editor
   mermaid.initialize({
     startOnLoad: false, theme: 'dark', darkMode: true, securityLevel: 'loose',
     flowchart: { curve: 'basis' },
@@ -1929,202 +2069,10 @@ async function buildPdfDom() {
     },
   });
 
-  // Light-mode overrides so the PDF is readable on paper (mirrors the
-  // existing @media print rules but applied directly for canvas capture).
-  const style = document.createElement('style');
-  style.textContent = `
-    #pdf-render-root h1,#pdf-render-root h2,#pdf-render-root h3,
-    #pdf-render-root h4,#pdf-render-root h5,#pdf-render-root h6 {
-      color:#111; font-weight:600; margin: 17px 0 7.5px; line-height:1.3;
-    }
-    #pdf-render-root h1 { font-size:19px; border-bottom:1px solid #e1e4e8; padding-bottom:7.5px; }
-    #pdf-render-root h2 { font-size:15px; border-bottom:1px solid #e1e4e8; padding-bottom:5.5px; }
-    #pdf-render-root h3 { font-size:13px; }
-    #pdf-render-root h4 { font-size:12px; }
-    #pdf-render-root p  { margin-bottom:10.5px; }
-    #pdf-render-root a  { color:#1a56db; text-decoration:underline; word-break:break-word; }
-    #pdf-render-root ul,#pdf-render-root ol { padding-left:21px; margin-bottom:10.5px; }
-    #pdf-render-root li+li { margin-top:3px; }
-    #pdf-render-root blockquote {
-      border-left:3px solid #6b7280; background:#f9fafb; color:#374151;
-      padding:7.5px 13.5px; margin:10.5px 0; border-radius:0 4px 4px 0;
-    }
-    #pdf-render-root blockquote p { margin:0; }
-    #pdf-render-root code {
-      background:#f3f4f6; border:1px solid #d1d5db; color:#c2410c;
-      font-family:'JetBrains Mono',monospace; font-size:10.5px;
-      padding:1px 5px; border-radius:4px;
-    }
-    #pdf-render-root pre {
-      background:#f8f9fa; border:1px solid #d1d5db; color:#1a1a1a;
-      padding:9.5px 11.5px; border-radius:6px; margin-bottom:10.5px;
-      white-space:pre-wrap; word-break:break-word; overflow:visible;
-    }
-    #pdf-render-root pre code { background:transparent; border:none; padding:0; font-size:10px; line-height:1.5; }
-    #pdf-render-root table { border-collapse:collapse; width:100%; margin-bottom:12.5px; font-size:11px; }
-    #pdf-render-root th,#pdf-render-root td { border:1px solid #d1d5db; padding:5.5px 9.5px; text-align:left; }
-    #pdf-render-root th { background:#f3f4f6; color:#374151; font-weight:600; }
-    #pdf-render-root tr:nth-child(even) { background:#f9fafb; }
-    #pdf-render-root hr { border:none; border-top:1px solid #d1d5db; margin:17px 0; }
-    #pdf-render-root img { max-width:100%; border-radius:4px; border:1px solid #d1d5db; }
-    #pdf-render-root .hljs { background:transparent !important; color:#1a1a1a !important; }
-    #pdf-render-root .mermaid-wrap { background:transparent; border:none; padding:0; }
-  `;
-  root.appendChild(style);
-
-  return { page, body };
-}
-
-// Collects y-offsets (in CSS px, relative to `page`'s top edge) where it's
-// safe to cut a PDF page — i.e. between lines/elements, never through one.
-// Block-level elements (p, li, tr, headings, hr, blockquote) contribute
-// their top and bottom edges. Elements whose content can itself span
-// multiple visual rows (pre, blockquote, td text) additionally contribute
-// per-line offsets so a tall block can still be split, just never mid-line.
-function collectBreakPoints(page, body) {
-  const points = new Set([0]);
-  const pageTop = page.getBoundingClientRect().top;
-
-  function addEdges(el) {
-    const r = el.getBoundingClientRect();
-    points.add(Math.round(r.top - pageTop));
-    points.add(Math.round(r.bottom - pageTop));
-  }
-
-  function addTextLines(el) {
-    // Walk text nodes and use Range rects to find each wrapped line's
-    // bottom edge — this is what lets us split a tall <pre> safely.
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-    let node;
-    while ((node = walker.nextNode())) {
-      if (!node.nodeValue || !node.nodeValue.trim()) continue;
-      const range = document.createRange();
-      range.selectNodeContents(node);
-      const rects = range.getClientRects();
-      for (const r of rects) {
-        if (r.height === 0) continue;
-        points.add(Math.round(r.top - pageTop));
-        points.add(Math.round(r.bottom - pageTop));
-      }
-    }
-  }
-
-  const blockSelector = 'p, li, tr, h1, h2, h3, h4, h5, h6, hr, blockquote, pre, img, table, .mermaid-wrap';
-  body.querySelectorAll(blockSelector).forEach(el => {
-    // Skip nested blocks already covered by an ancestor match
-    // (e.g. a <p> inside a <blockquote> — the blockquote's own
-    // line-level breakdown already covers it).
-    addEdges(el);
-  });
-
-  // Add per-line breakpoints inside any text-bearing block so a single
-  // unusually tall paragraph, list item, table cell, or code block can
-  // still be split across pages — just never through the middle of a line.
-  body.querySelectorAll('p, li, blockquote, pre, td, th').forEach(addTextLines);
-
-  return Array.from(points).sort((a, b) => a - b);
-}
-
-async function exportPdf() {
-  if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
-    // Libraries failed to load (e.g. offline) — fall back to native print.
-    printFallback();
-    return;
-  }
-
-  const btn = document.getElementById('btn-pdf');
-  btn.classList.add('printing');
-  pdfProgress(true, 'Rendering PDF…');
-
-  try {
-    const title = noteTitleEl.value.trim() || 'note';
-    const { page, body } = await buildPdfDom();
-
-    // Let images/fonts settle before measuring/capturing.
-    await new Promise(r => setTimeout(r, 60));
-
-    // Measure safe break points while the content is still live DOM —
-    // these are CSS-px offsets, relative to the page's top edge, that
-    // fall between lines/elements rather than through one.
-    const breakPointsCss = collectBreakPoints(page, body);
-
-    const scale = 2;
-    const canvas = await html2canvas(page, {
-      scale,
-      backgroundColor: '#ffffff',
-      useCORS: true,
-      windowWidth: page.scrollWidth,
-    });
-
-    pdfProgress(true, 'Paginating…');
-
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
-    const pageW = pdf.internal.pageSize.getWidth();
-    const pageH = pdf.internal.pageSize.getHeight();
-    const marginPt = 40; // consistent top + bottom margin on every page
-
-    const imgW = pageW; // content already padded horizontally inside the page element
-    const usableH = pageH - marginPt * 2;
-
-    const pxPerPt = canvas.width / imgW;
-    const usableHpx = usableH * pxPerPt;
-
-    // Break points measured in CSS px -> canvas px (account for html2canvas scale).
-    const breakPointsPx = breakPointsCss.map(p => p * scale).filter(p => p <= canvas.height);
-    if (breakPointsPx[breakPointsPx.length - 1] !== canvas.height) breakPointsPx.push(canvas.height);
-
-    // For a given target cut position, find the closest safe break point
-    // at or before it. Falls back to the hard pixel limit only when no
-    // safe point exists in range (e.g. one element taller than a page).
-    function nearestSafeCut(idealPos, floorPos) {
-      let best = -1;
-      for (const p of breakPointsPx) {
-        if (p > floorPos && p <= idealPos) best = Math.max(best, p);
-        if (p > idealPos) break;
-      }
-      return best > floorPos ? best : idealPos;
-    }
-
-    let renderedH = 0;
-    let first = true;
-    while (renderedH < canvas.height) {
-      const idealEnd = Math.min(renderedH + usableHpx, canvas.height);
-      let cutAt = idealEnd >= canvas.height ? canvas.height : nearestSafeCut(idealEnd, renderedH);
-      if (cutAt <= renderedH) cutAt = idealEnd; // safety: guarantee forward progress
-      const sliceH = cutAt - renderedH;
-
-      const sliceCanvas = document.createElement('canvas');
-      sliceCanvas.width = canvas.width;
-      sliceCanvas.height = sliceH;
-      const ctx = sliceCanvas.getContext('2d');
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
-      ctx.drawImage(canvas, 0, renderedH, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-
-      const sliceImgH = (sliceH * imgW) / canvas.width;
-      if (!first) pdf.addPage();
-      pdf.addImage(sliceCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, marginPt, imgW, sliceImgH);
-
-      renderedH = cutAt;
-      first = false;
-    }
-
-    pdf.save(title + '.pdf');
-  } catch (err) {
-    console.error('PDF export failed:', err);
-    pdfProgress(false);
-    if (confirm('PDF export failed. Use the browser print dialog instead?')) printFallback();
-    btn.classList.remove('printing');
-    document.getElementById('pdf-render-root').innerHTML = '';
-    return;
-  }
-
   document.getElementById('pdf-render-root').innerHTML = '';
   pdfProgress(false);
   btn.classList.remove('printing');
 }
-
 function downloadMd() {
   const blob = new Blob([editor.value], { type: 'text/markdown' });
   const a = document.createElement('a');
