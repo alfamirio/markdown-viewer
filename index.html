@@ -1815,8 +1815,62 @@ function pdfProgress(show, text) {
 }
 
 // Builds a clean, light, print-ready copy of the rendered markdown
+// Render a Mermaid diagram string to a PNG data-URL using mermaid.render()
+// which works entirely without needing visible DOM elements.
+async function mermaidToDataURL(code, id) {
+  // Use neutral theme for white PDF background
+  const { svg } = await mermaid.render(id, code);
+
+  // Parse the SVG to extract width/height
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svg, 'image/svg+xml');
+  const svgEl = doc.querySelector('svg');
+
+  let w = parseFloat(svgEl.getAttribute('width'))  || 0;
+  let h = parseFloat(svgEl.getAttribute('height')) || 0;
+
+  // Mermaid sometimes uses max-width style instead of attributes
+  if (!w || !h) {
+    const vb = svgEl.getAttribute('viewBox');
+    if (vb) {
+      const parts = vb.split(/\s+|,/);
+      w = parseFloat(parts[2]) || 648;
+      h = parseFloat(parts[3]) || 300;
+    }
+  }
+
+  // Clamp to page width (648 = 760 - 2*56 padding)
+  const maxW = 648;
+  if (w > maxW) { h = h * (maxW / w); w = maxW; }
+
+  // Stamp explicit size so the browser renders it correctly
+  svgEl.setAttribute('width',  w);
+  svgEl.setAttribute('height', h);
+
+  const svgStr  = new XMLSerializer().serializeToString(svgEl);
+  const encoded = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
+
+  // Draw onto a canvas so html2canvas gets a raster image
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = 2;
+      const cv = document.createElement('canvas');
+      cv.width  = w * scale;
+      cv.height = h * scale;
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.drawImage(img, 0, 0, cv.width, cv.height);
+      resolve({ dataURL: cv.toDataURL('image/png'), w, h });
+    };
+    img.onerror = () => resolve(null);
+    img.src = encoded;
+  });
+}
+
 // inside the off-screen #pdf-render-root, ready for rasterization.
-function buildPdfDom() {
+async function buildPdfDom() {
   const root = document.getElementById('pdf-render-root');
   root.innerHTML = '';
 
@@ -1837,6 +1891,43 @@ function buildPdfDom() {
   body.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.disabled = true; });
   page.appendChild(body);
   root.appendChild(page);
+
+  // Replace each .mermaid div with a pre-rasterised <img> so html2canvas
+  // never has to deal with SVG at all.
+  mermaid.initialize({ theme: 'neutral', startOnLoad: false, securityLevel: 'loose',
+    flowchart: { curve: 'basis' } });
+
+  const wraps = Array.from(body.querySelectorAll('.mermaid-wrap'));
+  for (const wrap of wraps) {
+    const mmdDiv = wrap.querySelector('.mermaid');
+    if (!mmdDiv) continue;
+    const code = mmdDiv.textContent.trim();
+    const uid  = 'pdfmmd-' + Math.random().toString(36).slice(2, 9);
+    try {
+      const result = await mermaidToDataURL(code, uid);
+      if (result) {
+        const img = document.createElement('img');
+        img.src = result.dataURL;
+        img.style.cssText = `display:block;width:${result.w}px;max-width:100%;height:auto;margin:12px auto;border-radius:4px;`;
+        wrap.replaceChildren(img);
+      }
+    } catch(e) {
+      // Leave as-is if rendering fails
+      console.warn('Mermaid PDF render failed:', e);
+    }
+  }
+
+  // Restore dark theme for the live editor
+  mermaid.initialize({
+    startOnLoad: false, theme: 'dark', darkMode: true, securityLevel: 'loose',
+    flowchart: { curve: 'basis' },
+    themeVariables: {
+      background:'#161b22', primaryColor:'#1f4068', primaryTextColor:'#e6edf3',
+      primaryBorderColor:'#58a6ff', lineColor:'#58a6ff', secondaryColor:'#1c2128',
+      tertiaryColor:'#21262d', edgeLabelBackground:'#161b22',
+      clusterBkg:'#1c2128', titleColor:'#e6edf3', nodeTextColor:'#e6edf3',
+    },
+  });
 
   // Light-mode overrides so the PDF is readable on paper (mirrors the
   // existing @media print rules but applied directly for canvas capture).
@@ -1877,6 +1968,7 @@ function buildPdfDom() {
     #pdf-render-root hr { border:none; border-top:1px solid #d1d5db; margin:17px 0; }
     #pdf-render-root img { max-width:100%; border-radius:4px; border:1px solid #d1d5db; }
     #pdf-render-root .hljs { background:transparent !important; color:#1a1a1a !important; }
+    #pdf-render-root .mermaid-wrap { background:transparent; border:none; padding:0; }
   `;
   root.appendChild(style);
 
@@ -1917,7 +2009,7 @@ function collectBreakPoints(page, body) {
     }
   }
 
-  const blockSelector = 'p, li, tr, h1, h2, h3, h4, h5, h6, hr, blockquote, pre, img, table';
+  const blockSelector = 'p, li, tr, h1, h2, h3, h4, h5, h6, hr, blockquote, pre, img, table, .mermaid-wrap';
   body.querySelectorAll(blockSelector).forEach(el => {
     // Skip nested blocks already covered by an ancestor match
     // (e.g. a <p> inside a <blockquote> — the blockquote's own
@@ -1946,7 +2038,7 @@ async function exportPdf() {
 
   try {
     const title = noteTitleEl.value.trim() || 'note';
-    const { page, body } = buildPdfDom();
+    const { page, body } = await buildPdfDom();
 
     // Let images/fonts settle before measuring/capturing.
     await new Promise(r => setTimeout(r, 60));
@@ -2268,17 +2360,181 @@ document.addEventListener('mouseup', () => {
 function DEFAULT_CONTENT(name) {
   return `# ${name}
 
-Start writing here. Your note is **auto-saved** to \`localStorage\`.
-
-## Tips
-
-- Use the **Notes** panel on the left to switch between notes
-- Click **+** to create a new note
-- Double-click a note name in the sidebar to rename it
-- Edit the title above the editor to rename the current note
-- Use \`Ctrl+S\` to save immediately
+> This note is **auto-saved** to \`localStorage\`. Use it as a reference for everything this editor supports.
 
 ---
+
+## 1. Text formatting
+
+Regular paragraph text. Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+
+**Bold text** and *italic text* and ***bold italic*** and ~~strikethrough~~.
+
+You can also write \`inline code\` inside a sentence, or combine **\`bold code\`**.
+
+---
+
+## 2. Headings
+
+# H1 — Page title
+## H2 — Section
+### H3 — Subsection
+#### H4 — Detail
+##### H5 — Minor note
+###### H6 — Fine print
+
+---
+
+## 3. Lists
+
+**Unordered:**
+
+- Item one
+- Item two
+  - Nested item
+  - Another nested
+- Item three
+
+**Ordered:**
+
+1. First step
+2. Second step
+3. Third step
+   1. Sub-step A
+   2. Sub-step B
+
+**Task list:**
+
+- [x] Design the layout
+- [x] Add syntax highlighting
+- [ ] Write documentation
+- [ ] Ship it
+
+---
+
+## 4. Blockquotes
+
+> "The best way to predict the future is to invent it."
+> — Alan Kay
+
+> Blockquotes can span **multiple lines** and contain \`inline code\` or other *formatting*.
+
+---
+
+## 5. Code blocks
+
+\`\`\`javascript
+// A quick sort implementation
+function quickSort(arr) {
+  if (arr.length <= 1) return arr;
+  const pivot = arr[Math.floor(arr.length / 2)];
+  const left  = arr.filter(x => x < pivot);
+  const mid   = arr.filter(x => x === pivot);
+  const right = arr.filter(x => x > pivot);
+  return [...quickSort(left), ...mid, ...quickSort(right)];
+}
+
+console.log(quickSort([3, 6, 8, 10, 1, 2, 1]));
+\`\`\`
+
+\`\`\`python
+# Fibonacci with memoization
+from functools import lru_cache
+
+@lru_cache(maxsize=None)
+def fib(n):
+    return n if n < 2 else fib(n - 1) + fib(n - 2)
+
+print([fib(i) for i in range(10)])
+\`\`\`
+
+\`\`\`bash
+# Install dependencies and run
+npm install && npm run dev
+\`\`\`
+
+---
+
+## 6. Tables
+
+| Feature            | Supported | Notes                        |
+|--------------------|:---------:|------------------------------|
+| Bold / Italic      | ✅        | Standard Markdown            |
+| Syntax highlighting| ✅        | Via highlight.js             |
+| Mermaid diagrams   | ✅        | Flowcharts, sequence, etc.   |
+| Table of contents  | ✅        | Auto-updates as you type     |
+| PDF export         | ✅        | Via html2canvas + jsPDF      |
+| Dark theme         | ✅        | Only theme (for now)         |
+
+---
+
+## 7. Links & images
+
+[Visit the Markdown Guide](https://www.markdownguide.org)
+
+![Placeholder image](https://placehold.co/600x200/1c2128/58a6ff?text=Image+placeholder)
+
+---
+
+## 8. Mermaid diagrams
+
+**Flowchart:**
+
+\`\`\`mermaid
+flowchart LR
+    A([Start]) --> B{Is it working?}
+    B -- Yes --> C[Ship it 🚀]
+    B -- No  --> D[Debug]
+    D --> E[Fix the bug]
+    E --> B
+\`\`\`
+
+**Sequence diagram:**
+
+\`\`\`mermaid
+sequenceDiagram
+    participant U as User
+    participant E as Editor
+    participant P as Preview
+
+    U->>E: Type Markdown
+    E->>E: Syntax highlight
+    E->>P: Parse & render
+    P-->>U: Live preview
+\`\`\`
+
+**Pie chart:**
+
+\`\`\`mermaid
+pie title Time spent writing
+    "Thinking" : 40
+    "Writing"  : 35
+    "Editing"  : 25
+\`\`\`
+
+---
+
+## 9. Keyboard shortcuts
+
+| Action              | Shortcut                  |
+|---------------------|---------------------------|
+| Save                | \`Ctrl + S\`              |
+| Bold                | \`Ctrl + B\`              |
+| Italic              | \`Ctrl + I\`              |
+| Inline code         | \`Ctrl + \`\`             |
+| Download .md        | \`Ctrl + Shift + S\`      |
+| Export PDF          | \`Ctrl + P\`              |
+| Toggle word wrap    | \`Alt + Z\`               |
+| Editor only         | \`Alt + 1\`               |
+| Split view          | \`Alt + 2\`               |
+| Preview only        | \`Alt + 3\`               |
+| Toggle sidebar      | \`Ctrl + \\\\\`           |
+| New note            | \`Ctrl + Alt + N\`        |
+| Show shortcuts      | \`?\`                     |
+
+---
+
+*Happy writing!* ✨
 `;
 }
 
