@@ -485,8 +485,6 @@
     }
 
     /* ── Editor textarea ──────────────────────────────── */
-    /* The textarea sits on top of the highlight overlay.
-       It must be transparent so the coloured div shows through. */
     #editor-wrap { position: relative; }
 
     #editor-text-wrap {
@@ -496,33 +494,11 @@
       display: flex;
     }
 
-    #editor-highlight {
-      position: absolute;
-      top: 0; left: 0;
-      right: 0; bottom: 0;
-      pointer-events: none;
-      overflow: hidden;
-      font-family: var(--mono);
-      font-size: 13.5px;
-      line-height: 1.7;
-      padding: 20px 12px 20px 14px;
-      white-space: pre-wrap;
-      word-break: break-word;
-      overflow-wrap: break-word;
-      tab-size: 2;
-      color: transparent;
-      background: transparent;
-      box-sizing: border-box;
-      z-index: 1;
-    }
-
     #editor {
-      position: relative;
-      z-index: 2;
       flex: 1;
       min-width: 0;
       background: transparent;
-      color: transparent;
+      color: var(--text);
       caret-color: var(--text);
       font-family: var(--mono);
       font-size: 13.5px;
@@ -537,36 +513,8 @@
       scrollbar-width: thin;
       scrollbar-color: var(--divider) transparent;
     }
-    /* Hide native selection; overlay paints its own selection background */
-    #editor.hl-selection-off::selection      { background: transparent; color: transparent; }
-    #editor.hl-selection-off::-moz-selection { background: transparent; color: transparent; }
     #editor::-webkit-scrollbar { width: 7px; }
     #editor::-webkit-scrollbar-thumb { background: var(--divider); border-radius: 4px; }
-
-    /* Selection spans rendered inside the overlay */
-    .md-sel { background: #264f78; border-radius: 1px; display: inline; color: inherit; }
-
-    /* ── Markdown syntax colours ──────────────────────── */
-    .md-h1         { color: #ff7b72; font-weight: 700; }
-    .md-h2         { color: #ffa657; font-weight: 700; }
-    .md-h3         { color: #f0c93a; font-weight: 600; }
-    .md-h4         { color: #7ee787; font-weight: 600; }
-    .md-h5         { color: #79c0ff; font-weight: 600; }
-    .md-h6         { color: #bc8cff; font-weight: 600; }
-    .md-bold       { color: #ffffff; font-weight: 700; }
-    .md-italic     { color: #ffb3b3; font-style: italic; }
-    .md-strike     { color: #6e7681; text-decoration: line-through; }
-    .md-code       { color: #e8965a; }
-    .md-codeblock  { color: #adbac7; }
-    .md-codeblock-lang { color: #79c0ff; font-weight: 600; }
-    .md-codeblock-lang-mermaid { color: #bc8cff; font-weight: 600; }
-    .md-blockquote { color: #bc8cff; border-left: none; }
-    .md-link-text  { color: #58a6ff; }
-    .md-link-url   { color: #58a6ff; }
-    .md-image      { color: #f778ba; }
-    .md-hr         { color: #3d444d; }
-    .md-list       { color: #f0c93a; font-weight: 700; }
-    .md-plain      { color: var(--text); }
 
     /* ── Preview ──────────────────────────────────────── */
     #preview {
@@ -655,7 +603,7 @@
       border-radius: var(--radius);
       border: 1px solid #f8514940;
     }
-    .hljs { background:transparent !important; }
+
 
     /* ── Print / PDF ──────────────────────────────────── */
     @media print {
@@ -1012,7 +960,6 @@
     <div class="toolbar-sep"></div>
 
     <button class="btn" id="btn-wrap" data-tip="Toggle word wrap" onclick="toggleWrap()">wrap</button>
-    <button class="btn active" id="btn-highlight" data-tip="Toggle syntax highlighting" onclick="toggleHighlight()">hl</button>
 
     <div class="toolbar-sep"></div>
 
@@ -1080,8 +1027,7 @@
           <div id="editor-wrap">
             <div id="line-numbers"></div>
             <div id="editor-text-wrap">
-              <div id="editor-highlight" aria-hidden="true"></div>
-              <textarea id="editor" class="wrap hl-selection-off" spellcheck="false" placeholder="Start writing Markdown here…"></textarea>
+              <textarea id="editor" class="wrap" spellcheck="false" placeholder="Start writing Markdown here…"></textarea>
             </div>
             <div id="wrap-mirror"></div>
           </div>
@@ -1119,8 +1065,7 @@
 
 <!-- marked + highlight.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+
 <!-- Mermaid diagrams -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.0/mermaid.min.js"></script>
 <!-- html2canvas + jsPDF for true PDF export -->
@@ -1141,7 +1086,6 @@ const saveEl       = document.getElementById('save-indicator');
 const wordEl       = document.getElementById('word-count');
 const lineEl       = document.getElementById('line-count');
 const btnWrap      = document.getElementById('btn-wrap');
-const btnHighlight = document.getElementById('btn-highlight');
 const notesList    = document.getElementById('notes-list');
 const noteTitleEl  = document.getElementById('note-title-input');
 const btnSidebar   = document.getElementById('btn-sidebar');
@@ -1354,19 +1298,15 @@ marked.use({
   }]
 });
 
-// Highlight.js integration + global options via the modern marked.use() API
 marked.use({
   breaks: true,
   gfm: true,
   renderer: {
     code(code, lang) {
-      // mermaid blocks are handled by the extension above; skip here
       if ((lang || '').trim().toLowerCase() === 'mermaid') return false;
-      const highlighted = (lang && hljs.getLanguage(lang))
-        ? hljs.highlight(code, { language: lang, ignoreIllegals: true }).value
-        : hljs.highlightAuto(code).value;
       const cls = lang ? ` class="language-${lang}"` : '';
-      return `<pre><code${cls}>${highlighted}</code></pre>\n`;
+      const escaped = code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      return `<pre><code${cls}>${escaped}</code></pre>\n`;
     }
   }
 });
@@ -1390,193 +1330,10 @@ function render() {
   mermaid.run({ nodes: preview.querySelectorAll('.mermaid') }).catch(() => {});
   updateStatus();
   updateLineNumbers();
-  highlightEditor();
   updateToc();
 }
 
-// ═══════════════════════════════════════════════════
-//  Editor syntax highlighting (overlay technique)
-// ═══════════════════════════════════════════════════
-const hlDiv = document.getElementById('editor-highlight');
 
-function esc(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-function highlightLine(line) {
-  // Fenced code block lines are handled by the block-level pass below;
-  // this handles inline patterns on a single line.
-
-  // Headings
-  const hm = line.match(/^(#{1,6})( .*)$/);
-  if (hm) {
-    const level = hm[1].length;
-    return `<span class="md-h${level}">${esc(hm[1])}${esc(hm[2])}</span>`;
-  }
-  // Blockquote
-  if (/^>/.test(line)) return `<span class="md-blockquote">${esc(line)}</span>`;
-  // HR
-  if (/^(\*{3,}|-{3,}|_{3,})\s*$/.test(line)) return `<span class="md-hr">${esc(line)}</span>`;
-  // List bullet/number — colour only the marker
-  const lm = line.match(/^(\s*)([-*+]|\d+\.)( .*)$/);
-  if (lm) {
-    return `${esc(lm[1])}<span class="md-list">${esc(lm[2])}</span>${inlineHighlight(lm[3])}`;
-  }
-
-  return inlineHighlight(line);
-}
-
-function inlineHighlight(text) {
-  // Process inline markdown: bold, italic, code, links, images, strikethrough.
-  // We walk through the string consuming tokens left-to-right.
-  let out = '';
-  let i = 0;
-  const s = text;
-  while (i < s.length) {
-    // Inline code  `...`
-    if (s[i] === '`') {
-      const end = s.indexOf('`', i + 1);
-      if (end !== -1) {
-        out += `<span class="md-code">${esc(s.slice(i, end + 1))}</span>`;
-        i = end + 1; continue;
-      }
-    }
-    // Image  ![alt](url)
-    if (s[i] === '!' && s[i+1] === '[') {
-      const cb = s.indexOf(']', i+2);
-      if (cb !== -1 && s[cb+1] === '(') {
-        const cp = s.indexOf(')', cb+2);
-        if (cp !== -1) {
-          out += `<span class="md-image">${esc(s.slice(i, cp+1))}</span>`;
-          i = cp + 1; continue;
-        }
-      }
-    }
-    // Link  [text](url)
-    if (s[i] === '[') {
-      const cb = s.indexOf(']', i+1);
-      if (cb !== -1 && s[cb+1] === '(') {
-        const cp = s.indexOf(')', cb+2);
-        if (cp !== -1) {
-          out += `<span class="md-link-text">${esc(s.slice(i, cb+1))}</span>`
-               + `<span class="md-link-url">${esc(s.slice(cb+1, cp+1))}</span>`;
-          i = cp + 1; continue;
-        }
-      }
-    }
-    // Bold+Italic  ***...***  or ___...___
-    if ((s.slice(i,i+3)==='***' || s.slice(i,i+3)==='___')) {
-      const end = s.indexOf(s.slice(i,i+3), i+3);
-      if (end !== -1) {
-        out += `<span class="md-bold md-italic">${esc(s.slice(i, end+3))}</span>`;
-        i = end + 3; continue;
-      }
-    }
-    // Bold  **...** or __...__
-    if ((s.slice(i,i+2)==='**' || s.slice(i,i+2)==='__')) {
-      const end = s.indexOf(s.slice(i,i+2), i+2);
-      if (end !== -1) {
-        out += `<span class="md-bold">${esc(s.slice(i, end+2))}</span>`;
-        i = end + 2; continue;
-      }
-    }
-    // Italic  *...* or _..._ (only single marker, not part of ** or __)
-    if ((s[i]==='*' || s[i]==='_') && s[i+1] && s[i+1]!==s[i] && (i===0 || s[i-1]!==s[i])) {
-      const marker = s[i];
-      const end = s.indexOf(marker, i+1);
-      if (end !== -1 && s[end-1] !== marker) {
-        out += `<span class="md-italic">${esc(s.slice(i, end+1))}</span>`;
-        i = end + 1; continue;
-      }
-    }
-    // Strikethrough  ~~...~~
-    if (s.slice(i,i+2)==='~~') {
-      const end = s.indexOf('~~', i+2);
-      if (end !== -1) {
-        out += `<span class="md-strike">${esc(s.slice(i, end+2))}</span>`;
-        i = end + 2; continue;
-      }
-    }
-    // Plain character — wrap individually so it doesn't override child spans
-    out += `<span class="md-plain">${esc(s[i])}</span>`;
-    i++;
-  }
-  return out;
-}
-
-function highlightEditor() {
-  if (!hlOn) return;
-
-  const selStart = editor.selectionStart;
-  const selEnd   = editor.selectionEnd;
-
-  hlDiv.innerHTML = buildHtml(editor.value, selStart, selEnd);
-
-  hlDiv.scrollTop  = editor.scrollTop;
-  hlDiv.scrollLeft = editor.scrollLeft;
-}
-
-function buildHtml(text, selStart, selEnd) {
-  const lines = text.split('\n');
-  const hasSel = selStart !== undefined && selEnd !== undefined && selStart !== selEnd;
-  let html = '';
-  let inCode = false;
-  let codeLang = '';
-  // Track absolute char offset (including newlines) to know when we're inside the selection
-  let offset = 0;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const lineStart = offset;
-    const lineEnd   = offset + line.length;
-    const fence = line.match(/^(`{3,})([\w-]*)/);
-    let lineHtml;
-    if (fence && !inCode) {
-      inCode = true; codeLang = fence[2];
-      lineHtml = `<span class="md-codeblock">` + esc(fence[0].slice(0, fence[1].length))
-               + `<span class="md-codeblock-lang">${esc(codeLang)}</span>`
-               + esc(line.slice(fence[1].length + codeLang.length)) + `</span>`;
-    } else if (inCode && fence) {
-      inCode = false; codeLang = '';
-      lineHtml = `<span class="md-codeblock">${esc(line)}</span>`;
-    } else if (inCode) {
-      lineHtml = `<span class="md-codeblock">${esc(line)}</span>`;
-    } else {
-      lineHtml = highlightLine(line);
-    }
-    // Wrap the selected portion of this line in a md-sel background span.
-    // We do this by splitting the plain text at the selection boundaries,
-    // then re-running the highlighter on each segment and wrapping the middle.
-    if (hasSel && selStart < lineEnd && selEnd > lineStart) {
-      const relStart = Math.max(0, selStart - lineStart);
-      const relEnd   = Math.min(line.length, selEnd - lineStart);
-      const before = line.slice(0, relStart);
-      const sel    = line.slice(relStart, relEnd);
-      const after  = line.slice(relEnd);
-      const hlBefore = before.length ? (inCode ? `<span class="md-codeblock">${esc(before)}</span>` : highlightLine(before)) : '';
-      const hlSel    = `<mark class="md-sel">${inCode ? `<span class="md-codeblock">${esc(sel)}</span>` : highlightLine(sel)}</mark>`;
-      const hlAfter  = after.length  ? (inCode ? `<span class="md-codeblock">${esc(after)}</span>`  : highlightLine(after))  : '';
-      lineHtml = hlBefore + hlSel + hlAfter;
-    }
-    html += lineHtml;
-    offset += line.length + 1; // +1 for the \n
-    if (i < lines.length - 1) html += '\n';
-  }
-  return html;
-}
-
-// Sync overlay scroll whenever the textarea scrolls
-editor.addEventListener('scroll', () => {
-  hlDiv.scrollTop  = editor.scrollTop;
-  hlDiv.scrollLeft = editor.scrollLeft;
-});
-
-// Re-render selection highlight on every selection change
-editor.addEventListener('mouseup',   highlightEditor);
-editor.addEventListener('keyup',     highlightEditor);
-editor.addEventListener('mousedown', highlightEditor);
-document.addEventListener('selectionchange', () => {
-  if (document.activeElement === editor) highlightEditor();
-});
 
 // ═══════════════════════════════════════════════════
 //  Line-number gutter (wrap-aware)
@@ -1878,27 +1635,7 @@ function toggleWrap() {
   saveConfig();
 }
 
-// ═══════════════════════════════════════════════════
-//  Syntax highlight toggle
-// ═══════════════════════════════════════════════════
-let hlOn = true;
-function toggleHighlight() {
-  hlOn = !hlOn;
-  btnHighlight.classList.toggle('active', hlOn);
-  if (hlOn) {
-    hlDiv.style.visibility = '';
-    editor.style.color = 'transparent';
-    editor.style.caretColor = '';
-    editor.classList.add('hl-selection-off');
-    highlightEditor();
-  } else {
-    hlDiv.style.visibility = 'hidden';
-    editor.style.color = 'var(--text)';
-    editor.style.caretColor = 'var(--text)';
-    editor.classList.remove('hl-selection-off');
-  }
-  saveConfig();
-}
+
 
 // ═══════════════════════════════════════════════════
 //  PDF / Download
@@ -2559,7 +2296,6 @@ function resetAllData() {
 function saveConfig() {
   const cfg = {
     wrap:             wrapOn,
-    highlight:        hlOn,
     sidebar:          !document.getElementById('sidebar').classList.contains('collapsed'),
     toc:              tocVisible,
     viewMode:         currentViewMode,
@@ -2616,16 +2352,6 @@ function dismissWarning() {
     editor.className  = wrapOn ? 'wrap' : 'no-wrap';
     preview.className = wrapOn ? 'wrap' : 'no-wrap';
     btnWrap.classList.toggle('active', wrapOn);
-
-    // highlight
-    hlOn = cfg.highlight !== false;
-    btnHighlight.classList.toggle('active', hlOn);
-    if (!hlOn) {
-      hlDiv.style.visibility = 'hidden';
-      editor.style.color = 'var(--text)';
-      editor.style.caretColor = 'var(--text)';
-      editor.classList.remove('hl-selection-off');
-    }
 
     // sidebar
     if (cfg.sidebar === false) {
