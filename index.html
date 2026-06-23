@@ -1117,6 +1117,7 @@
 
       <button class="btn" id="btn-wrap" data-tip="Toggle word wrap" onclick="toggleWrap()">wrap</button>
       <button class="btn active" id="btn-highlight" data-tip="Toggle syntax highlighting" onclick="toggleHighlight()">highlight</button>
+      <button class="btn active" id="btn-sync-scroll" data-tip="Link/unlink scroll between editor and preview" onclick="toggleSyncScroll()">⇅ sync</button>
 
       <div class="toolbar-sep"></div>
 
@@ -1125,7 +1126,7 @@
       <button class="btn" data-tip="Download .md"          onclick="downloadMd()">↓ .md</button>
       <button class="btn" id="btn-pdf" data-tip="Export PDF" onclick="exportPdf()">↓ .pdf</button>
       <button class="btn" data-tip="Export standalone HTML" onclick="exportHtml()">↓ .html</button>
-      <button class="btn" data-tip="Copy raw markdown"     onclick="copyRaw()">⎘ copy</button>
+      <button class="btn" id="btn-copy" data-tip="Copy raw markdown"     onclick="copyRaw()">⎘ copy</button>
 
       <div class="toolbar-sep"></div>
 
@@ -1286,7 +1287,7 @@
   // keep working with little to no change.
   import { EditorView, keymap, placeholder, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection } from "@codemirror/view";
   import { EditorState, Compartment, Annotation } from "@codemirror/state";
-  import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+  import { defaultKeymap, history, historyKeymap, deleteLine } from "@codemirror/commands";
   import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
   import { languages } from "@codemirror/language-data";
   import { syntaxHighlighting, HighlightStyle, bracketMatching } from "@codemirror/language";
@@ -1411,6 +1412,7 @@
   // doesn't fire alongside — and sometimes race against — handleKeys()
   // for the same keystroke; everything else in defaultKeymap (line
   // move/copy, escape, Mod-Enter, etc.) is kept since it doesn't collide.
+  // Mod-d is intentionally NOT reserved here — it's wired to deleteLine below.
   const RESERVED_BY_APP = new Set(['Mod-i', 'Mod-]', 'Mod-[', 'Shift-Mod-k', 'Shift-Mod-K']);
   const safeDefaultKeymap = defaultKeymap.filter(b => !RESERVED_BY_APP.has(b.key) && !RESERVED_BY_APP.has(b.mac));
 
@@ -1454,7 +1456,7 @@
         drawSelection(),
         bracketMatching(),
         history(),
-        keymap.of([...safeDefaultKeymap, ...historyKeymap]),
+        keymap.of([{ key: 'Mod-d', run: deleteLine }, ...safeDefaultKeymap, ...historyKeymap]),
         markdown({ base: markdownLanguage, codeLanguages: languages }),
         highlightCompartment.of(highlightExt),
         wrapCompartment.of(EditorView.lineWrapping),
@@ -1877,9 +1879,17 @@ function render() {
 // ═══════════════════════════════════════════════════
 let suppressEditorScroll  = false;
 let suppressPreviewScroll = false;
+let syncScrollEnabled     = true;
+
+function toggleSyncScroll() {
+  syncScrollEnabled = !syncScrollEnabled;
+  const btn = document.getElementById('btn-sync-scroll');
+  btn.classList.toggle('active', syncScrollEnabled);
+  saveConfig();
+}
 
 editor.addEventListener('scroll', () => {
-  if (suppressEditorScroll) return;
+  if (!syncScrollEnabled || suppressEditorScroll) return;
   const pct = editor.scrollTop / (editor.scrollHeight - editor.clientHeight || 1);
   suppressPreviewScroll = true;
   const maxPreview = Math.max(0, preview.scrollHeight - preview.clientHeight);
@@ -1888,7 +1898,7 @@ editor.addEventListener('scroll', () => {
 });
 
 preview.addEventListener('scroll', () => {
-  if (suppressPreviewScroll) return;
+  if (!syncScrollEnabled || suppressPreviewScroll) return;
   const pct = preview.scrollTop / (preview.scrollHeight - preview.clientHeight || 1);
   suppressEditorScroll = true;
   const maxEditor = Math.max(0, editor.scrollHeight - editor.clientHeight);
@@ -1937,7 +1947,7 @@ function handleKeys(e) {
   // ── Formatting ──────────────────────────────────
   if (mod && !shift && !alt && e.key === 'b') { e.preventDefault(); fmt('**','**'); return; }
   if (mod && !shift && !alt && e.key === 'i') { e.preventDefault(); fmt('_','_'); return; }
-  if (mod && !shift && !alt && e.key === 'd') { e.preventDefault(); fmt('~~','~~'); return; }
+
   if (mod && !shift && !alt && e.key === '`') { e.preventDefault(); fmt('`','`'); return; }
   if (mod && !shift && !alt && e.key === '1') { e.preventDefault(); fmtLine('# '); return; }
   if (mod && !shift && !alt && e.key === '2') { e.preventDefault(); fmtLine('## '); return; }
@@ -2716,21 +2726,24 @@ function tocJump(lineIndex) {
 
 let _copyRestoreTimer = null;
 function copyRaw() {
+  const copyBtn = document.getElementById('btn-copy');
   navigator.clipboard.writeText(editor.value).then(() => {
-    // Capture both pieces of state so we can restore them faithfully.
-    // We only snapshot once — if a copy is already in flight, the
-    // timer below has already been cancelled so prevText/prevClass
-    // still hold the pre-copy values from the first call.
+    // Snapshot button state once; if a copy is already in flight the
+    // timer has been cancelled but the prev* values still hold the
+    // original pre-copy state from the first call.
     if (_copyRestoreTimer === null) {
-      copyRaw._prevText  = saveEl.textContent;
-      copyRaw._prevClass = saveEl.className;
+      copyRaw._prevText  = copyBtn.textContent;
+      copyRaw._prevStyle = copyBtn.getAttribute('style') || '';
     }
     clearTimeout(_copyRestoreTimer);
-    saveEl.textContent = '✓ copied!';
-    saveEl.className   = '';           // neutral — no saved/unsaved colour
+    copyBtn.textContent = '✓ copied!';
+    copyBtn.style.color       = 'var(--green)';
+    copyBtn.style.borderColor = 'var(--green)';
+    copyBtn.style.background  = 'rgba(63,185,80,0.12)';
+    copyBtn.style.opacity     = '1';
     _copyRestoreTimer = setTimeout(() => {
-      saveEl.textContent = copyRaw._prevText;
-      saveEl.className   = copyRaw._prevClass;
+      copyBtn.textContent = copyRaw._prevText;
+      copyBtn.setAttribute('style', copyRaw._prevStyle);
       _copyRestoreTimer  = null;
     }, 1500);
   });
@@ -2945,6 +2958,7 @@ function saveConfig() {
     toc:              tocVisible,
     viewMode:         currentViewMode,
     activeId:         activeId,
+    syncScroll:       syncScrollEnabled,
   };
   localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
 }
@@ -3027,6 +3041,12 @@ function dismissWarning() {
     if (cfg.viewMode && cfg.viewMode !== 'both') {
       setViewMode(cfg.viewMode);
     }
+
+    // sync scroll
+    if (cfg.syncScroll === false) {
+      syncScrollEnabled = false;
+      document.getElementById('btn-sync-scroll').classList.remove('active');
+    }
     // (warning footer: show unless user has explicitly dismissed it)
 
   } catch(e) {}
@@ -3063,7 +3083,7 @@ Object.assign(window, {
   closeHkModal, copyRaw, createNote, dismissWarning, downloadMd, exportHtml, exportPdf,
   fmt, fmtBlock, fmtLine, insertLink, insertText, loadMd, openHkModal,
   resetAllData, setViewMode, tocJump, toggleHighlight, toggleSidebar,
-  toggleToc, toggleWrap, renameCurrentNote, onMdFileLoad,
+  toggleToc, toggleWrap, toggleSyncScroll, renameCurrentNote, onMdFileLoad,
 });
 
 // ═══════════════════════════════════════════════════
@@ -3212,7 +3232,7 @@ else window.addEventListener('cm-ready', boot, { once: true });
       <div class="hk-grid">
         <div class="hk-row"><span class="hk-desc">Bold</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>B</kbd></span></div>
         <div class="hk-row"><span class="hk-desc">Italic</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>I</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Strikethrough</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>D</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Delete line</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>D</kbd></span></div>
         <div class="hk-row"><span class="hk-desc">Inline code</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>`</kbd></span></div>
         <div class="hk-row"><span class="hk-desc">Heading 1</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>1</kbd></span></div>
         <div class="hk-row"><span class="hk-desc">Heading 2</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>2</kbd></span></div>
