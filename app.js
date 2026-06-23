@@ -19,7 +19,7 @@ document.getElementById('btn-new-note').addEventListener('click', () => createNo
 document.getElementById('btn-new-note-template').addEventListener('click', () => createNote());
 
 function activeNoteName() {
-  const note = notes.find(n => n.id === activeId);
+  const note = getActiveNote();
   return (note && note.name.trim()) ? note.name.trim() : 'note';
 }
 
@@ -77,6 +77,11 @@ function createNote(name, content) {
 }
 
 function deleteNote(id) {
+  // Cancel any pending autosave — if this is the active note, the timer could
+  // fire after activeId has changed and write content to the wrong note.
+  clearTimeout(saveTimer);
+  saveTimer = null;
+
   const note = notes.find(n => n.id === id);
   const name = note ? note.name : 'this note';
 
@@ -111,7 +116,7 @@ function switchNote(id) {
   if (activeId) saveContent(activeId, editor.value);
 
   activeId = id;
-  const note = notes.find(n => n.id === id);
+  const note = getActiveNote();
   editor.value = loadContent(id);
   render();
   markSaved();
@@ -119,7 +124,7 @@ function switchNote(id) {
   updateTagButtons();
   editor.scrollTop = 0;
   preview.scrollTop = 0;
-  saveConfig();
+  if (!isInitializing) saveConfig();
 }
 
 // ── Sidebar DOM ────────────────────────────────────
@@ -176,7 +181,16 @@ function renderSidebar() {
       input.focus();
       input.select();
 
+      let cancelled = false;
+
       function commit() {
+        if (cancelled) {
+          // Restore span without saving
+          nameEl.textContent = note.name;
+          item.classList.remove('renaming');
+          item.replaceChild(nameEl, input);
+          return;
+        }
         note.name = input.value.trim() || 'Untitled';
         saveIndex();
         // Restore the span
@@ -191,7 +205,7 @@ function renderSidebar() {
       input.addEventListener('keydown', e => {
         e.stopPropagation();
         if (e.key === 'Enter')  { e.preventDefault(); input.blur(); }
-        if (e.key === 'Escape') { input.value = note.name; input.blur(); }
+        if (e.key === 'Escape') { cancelled = true; input.blur(); }
       });
       input.addEventListener('input', e => e.stopPropagation());
     }
@@ -226,9 +240,7 @@ function renderSidebar() {
         const m = freeTagStyle(tag);
         const pill = document.createElement('span');
         pill.className = 'note-tag-pill';
-        pill.style.color       = m.color;
-        pill.style.background  = m.bg;
-        pill.style.borderColor = m.border;
+        applyTagStyle(pill, m);
         pill.title = tag;
         pill.textContent = tag;
         pillsRow.appendChild(pill);
@@ -323,7 +335,7 @@ marked.use({
     code(code, lang) {
       if ((lang || '').trim().toLowerCase() === 'mermaid') return false;
       const cls = lang ? ` class="language-${lang}"` : '';
-      const escaped = code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const escaped = escapeHtml(code);
       return `<pre><code${cls}>${escaped}</code></pre>\n`;
     }
   }
@@ -400,8 +412,12 @@ function updateStatus() {
   lineEl.textContent = lines + (lines === 1 ? ' line'  : ' lines');
 }
 
-function markSaved()   { saveEl.className = 'saved';   saveEl.textContent = '● saved'; }
-function markUnsaved() { saveEl.className = 'unsaved'; saveEl.textContent = '● unsaved'; }
+function setSaveState(saved) {
+  saveEl.className  = saved ? 'saved'   : 'unsaved';
+  saveEl.textContent = saved ? '● saved' : '● unsaved';
+}
+const markSaved   = () => setSaveState(true);
+const markUnsaved = () => setSaveState(false);
 
 // ═══════════════════════════════════════════════════
 //  Auto-save
@@ -659,45 +675,54 @@ function freeTagStyle(tag) {
   return FREE_TAG_PALETTE[Math.abs(h) % FREE_TAG_PALETTE.length];
 }
 
+function getActiveNote() {
+  return notes.find(n => n.id === activeId);
+}
+
 function getActiveTags() {
-  const note = notes.find(n => n.id === activeId);
+  const note = getActiveNote();
   return (note && Array.isArray(note.tags)) ? note.tags : [];
 }
 
-function toggleTag(tag) {
-  const note = notes.find(n => n.id === activeId);
+
+// Shared helper: mutate the active note's tags array, then persist + re-render.
+function mutateTags(fn) {
+  const note = getActiveNote();
   if (!note) return;
   if (!Array.isArray(note.tags)) note.tags = [];
-  const idx = note.tags.indexOf(tag);
-  if (idx === -1) note.tags.push(tag);
-  else note.tags.splice(idx, 1);
+  if (fn(note.tags) === false) return; // fn returns false to abort
   saveIndex();
   updateTagButtons();
   renderSidebar();
+}
+
+function toggleTag(tag) {
+  mutateTags(tags => {
+    const idx = tags.indexOf(tag);
+    if (idx === -1) tags.push(tag); else tags.splice(idx, 1);
+  });
 }
 
 function addFreeTag(raw) {
   const tag = raw.trim().toLowerCase().replace(/[,;\s]+/g, '-').replace(/[^a-z0-9\-_]/g, '').slice(0, 32);
-  if (!tag) return;
-  const note = notes.find(n => n.id === activeId);
-  if (!note) return;
-  if (!Array.isArray(note.tags)) note.tags = [];
-  if (!note.tags.includes(tag)) {
-    note.tags.push(tag);
-    saveIndex();
-    updateTagButtons();
-    renderSidebar();
-  }
+  mutateTags(tags => {
+    if (!tag || tags.includes(tag)) return false;
+    tags.push(tag);
+  });
 }
 
 function removeFreeTag(tag) {
-  const note = notes.find(n => n.id === activeId);
-  if (!note || !Array.isArray(note.tags)) return;
-  const idx = note.tags.indexOf(tag);
-  if (idx !== -1) note.tags.splice(idx, 1);
-  saveIndex();
-  updateTagButtons();
-  renderSidebar();
+  mutateTags(tags => {
+    const idx = tags.indexOf(tag);
+    if (idx !== -1) tags.splice(idx, 1);
+  });
+}
+
+function applyTagStyle(el, m) {
+  el.style.color       = m ? m.color  : '';
+  el.style.background  = m ? m.bg     : '';
+  el.style.borderColor = m ? m.border : '';
+  el.style.opacity     = m ? '1'      : '';
 }
 
 function updateTagButtons() {
@@ -708,19 +733,8 @@ function updateTagButtons() {
     const btn = document.getElementById('tag-btn-' + tag);
     if (!btn) return;
     const on = active.includes(tag);
-    const m  = TAG_META[tag];
     btn.classList.toggle('tag-active', on);
-    if (on) {
-      btn.style.color       = m.color;
-      btn.style.background  = m.bg;
-      btn.style.borderColor = m.border;
-      btn.style.opacity     = '1';
-    } else {
-      btn.style.color       = '';
-      btn.style.background  = '';
-      btn.style.borderColor = '';
-      btn.style.opacity     = '';
-    }
+    applyTagStyle(btn, on ? TAG_META[tag] : null);
   });
 
   // ── Free-tag chips in the toolbar input area ─────
@@ -731,9 +745,7 @@ function updateTagButtons() {
     const m = freeTagStyle(tag);
     const chip = document.createElement('span');
     chip.className = 'tag-chip';
-    chip.style.color       = m.color;
-    chip.style.background  = m.bg;
-    chip.style.borderColor = m.border;
+    applyTagStyle(chip, m);
     chip.textContent = tag;
     const x = document.createElement('button');
     x.className = 'tag-chip-remove';
@@ -760,6 +772,12 @@ function updateTagButtons() {
       const val = input.value.replace(/,/g, '');
       addFreeTag(val);
       input.value = '';
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      input.value = '';
+      input.blur();
       return;
     }
     if (e.key === 'Backspace' && input.value === '') {
@@ -791,12 +809,26 @@ function pdfProgress(show, text) {
   if (text) document.getElementById('pdf-progress-text').textContent = text;
 }
 
+// ── Shared canvas helper ─────────────────────────────────────────────────
+// Draws img onto a white-filled canvas and returns a JPEG data URL.
+// scale > 1 increases output resolution (used for Mermaid's 2x render).
+function imageToJpegDataURL(img, w, h, scale = 1, quality = 0.85) {
+  const cv = document.createElement('canvas');
+  cv.width  = w * scale;
+  cv.height = h * scale;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.drawImage(img, 0, 0, cv.width, cv.height);
+  return cv.toDataURL('image/jpeg', quality);
+}
+
 // ── Mermaid → PNG data-URL ────────────────────────────────────────────────
 async function mermaidToDataURL(code, id) {
   const { svg } = await mermaid.render(id, code);
   const parser = new DOMParser();
-  const doc = parser.parseFromString(svg, 'image/svg+xml');
-  const svgEl = doc.querySelector('svg');
+  const svgDoc = parser.parseFromString(svg, 'image/svg+xml');
+  const svgEl = svgDoc.querySelector('svg');
   let w = parseFloat(svgEl.getAttribute('width'))  || 0;
   let h = parseFloat(svgEl.getAttribute('height')) || 0;
   if (!w || !h) {
@@ -806,17 +838,10 @@ async function mermaidToDataURL(code, id) {
   const maxW = 470;
   if (w > maxW) { h = h * maxW / w; w = maxW; }
   svgEl.setAttribute('width', w); svgEl.setAttribute('height', h);
-  const svgStr  = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svgEl));
+  const svgStr = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svgEl));
   return new Promise(resolve => {
     const img = new Image();
-    img.onload = () => {
-      const sc = 2, cv = document.createElement('canvas');
-      cv.width = w * sc; cv.height = h * sc;
-      const ctx = cv.getContext('2d');
-      ctx.fillStyle = '#fff'; ctx.fillRect(0,0,cv.width,cv.height);
-      ctx.drawImage(img, 0, 0, cv.width, cv.height);
-      resolve({ dataURL: cv.toDataURL('image/jpeg', 0.7), w, h });
-    };
+    img.onload = () => resolve({ dataURL: imageToJpegDataURL(img, w, h, 2, 0.7), w, h });
     img.onerror = () => resolve(null);
     img.src = svgStr;
   });
@@ -1024,37 +1049,28 @@ async function exportPdf() {
       const src = imgEl.src || imgEl.getAttribute('src');
       if (!src) return;
       try {
-        // Fetch as blob to avoid canvas CORS taint on external images
-        let dataURL;
+        // Fetch as blob to avoid canvas CORS taint on external images.
+        // Use a blob URL directly for the canvas draw — no need to re-encode
+        // the blob as a data URL and reload it as a second Image.
+        let imgSrc;
+        let blobUrl = null;
         try {
           const resp = await fetch(src);
           const blob = await resp.blob();
-          dataURL = await new Promise((res, rej) => {
-            const r = new FileReader();
-            r.onload = () => res(r.result);
-            r.onerror = rej;
-            r.readAsDataURL(blob);
-          });
+          blobUrl = URL.createObjectURL(blob);
+          imgSrc = blobUrl;
         } catch(fetchErr) {
           // Fallback: try direct load with crossOrigin
-          const loaded = await new Promise((res, rej) => {
-            const i = new Image(); i.crossOrigin = 'anonymous';
-            i.onload = () => res(i); i.onerror = rej; i.src = src;
-          });
-          const cv = document.createElement('canvas');
-          cv.width = loaded.naturalWidth; cv.height = loaded.naturalHeight;
-          cv.getContext('2d').drawImage(loaded, 0, 0);
-          dataURL = cv.toDataURL('image/jpeg', 0.85);
+          imgSrc = src;
         }
         const loaded = await new Promise((res, rej) => {
-          const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataURL;
+          const i = new Image();
+          if (!blobUrl) i.crossOrigin = 'anonymous';
+          i.onload = () => res(i); i.onerror = rej; i.src = imgSrc;
         });
-        const cv = document.createElement('canvas');
-        cv.width = loaded.naturalWidth; cv.height = loaded.naturalHeight;
-        const ctx = cv.getContext('2d');
-        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
-        ctx.drawImage(loaded, 0, 0);
-        await renderDataURLImage(cv.toDataURL('image/jpeg', 0.85), loaded.naturalWidth, loaded.naturalHeight);
+        if (blobUrl) URL.revokeObjectURL(blobUrl);
+        const dataURL = imageToJpegDataURL(loaded, loaded.naturalWidth, loaded.naturalHeight);
+        await renderDataURLImage(dataURL, loaded.naturalWidth, loaded.naturalHeight);
       } catch(e) { console.warn('PDF: could not render image', src, e); }
     }
 
@@ -1094,10 +1110,10 @@ function downloadBlob(blob, filename) {
 }
 
 function downloadMd() {
-    downloadBlob(
-      new Blob([editor.value], { type: 'text/markdown' }),
-      activeNoteName() + '.md'
-    );
+  downloadBlob(
+    new Blob([editor.value], { type: 'text/markdown' }),
+    activeNoteName() + '.md'
+  );
 }
 
 // ═══════════════════════════════════════════════════
@@ -1123,8 +1139,9 @@ function exportJson() {
 }
 
 function loadFile() {
-  document.getElementById('file-input').value = '';
-  document.getElementById('file-input').click();
+  const fi = document.getElementById('file-input');
+  fi.value = '';
+  fi.click();
 }
 
 function onFileLoad(e) {
@@ -1298,14 +1315,7 @@ ${bodyHtml}
 <!-- Mermaid (re-renders any diagrams) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.0/mermaid.min.js"><\/script>
 <script>
-  // Config kept in sync with MERMAID_DARK_CONFIG in app.js
-  mermaid.initialize({ startOnLoad:true, theme:'dark', darkMode:true,
-    themeVariables:{ background:'#161b22', primaryColor:'#1f4068',
-      primaryTextColor:'#e6edf3', primaryBorderColor:'#58a6ff',
-      lineColor:'#58a6ff', secondaryColor:'#1c2128', tertiaryColor:'#21262d',
-      edgeLabelBackground:'#161b22', clusterBkg:'#1c2128',
-      titleColor:'#e6edf3', nodeTextColor:'#e6edf3' },
-    flowchart:{ curve:'basis' }, securityLevel:'loose' });
+  mermaid.initialize(${JSON.stringify({ ...MERMAID_DARK_CONFIG, startOnLoad: true })});
 <\/script>
 <!-- highlight.js for code blocks -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
@@ -1344,20 +1354,29 @@ function toggleToc() {
   saveConfig();
 }
 
+// Shared heading parser used by both updateToc and tocJump.
+// Returns [{level, text, line, charPos}] with fenced-code blocks excluded.
+// charPos is the character offset of the heading line's first character.
+function parseHeadings(text) {
+  const lines = text.split('\n');
+  const headings = [];
+  let inCode = false, charPos = 0;
+  lines.forEach((line, i) => {
+    if (/^\s{0,3}`{3,}/.test(line)) { inCode = !inCode; charPos += line.length + 1; return; }
+    if (!inCode) {
+      const m = line.match(/^(#{1,6})\s+(.+)/);
+      if (m) headings.push({ level: m[1].length, text: m[2].trim(), line: i, charPos });
+    }
+    charPos += line.length + 1;
+  });
+  return headings;
+}
+
 function updateToc() {
   const tocList = document.getElementById('toc-list');
   if (!tocList) return;
 
-  const lines = editor.value.split('\n');
-  const headings = [];
-  let inCode = false;
-
-  lines.forEach((line, i) => {
-    if (/^`{3,}/.test(line)) { inCode = !inCode; return; }
-    if (inCode) return;
-    const m = line.match(/^(#{1,6})\s+(.+)/);
-    if (m) headings.push({ level: m[1].length, text: m[2].trim(), line: i });
-  });
+  const headings = parseHeadings(editor.value);
 
   if (headings.length === 0) {
     tocList.innerHTML = '<span class="toc-empty">No headings yet</span>';
@@ -1366,7 +1385,6 @@ function updateToc() {
 
   // Escape heading text before interpolating into HTML to prevent XSS —
   // a heading like ## <img src=x onerror=alert(1)> would otherwise execute.
-
   tocList.innerHTML = headings.map(h => {
     const indent = `toc-h${h.level}`;
     const safe   = escapeHtml(h.text);
@@ -1375,14 +1393,11 @@ function updateToc() {
 }
 
 function tocJump(lineIndex) {
-  const lines = editor.value.split('\n');
-  // Single pass: compute char offset and heading index simultaneously
-  let charPos = 0, hIdx = 0, inCode = false;
-  for (let i = 0; i < lineIndex; i++) {
-    charPos += lines[i].length + 1;
-    if (/^`{3,}/.test(lines[i])) { inCode = !inCode; continue; }
-    if (!inCode && /^#{1,6}\s/.test(lines[i])) hIdx++;
-  }
+  const headings = parseHeadings(editor.value);
+  const target   = headings.find(h => h.line === lineIndex);
+  const charPos  = target ? target.charPos : 0;
+  // Index among all headings before this line — used to match preview <h> elements.
+  const hIdx     = headings.filter(h => h.line < lineIndex).length;
 
   editor.focus();
   editor.setSelectionRange(charPos, charPos);
@@ -1391,52 +1406,14 @@ function tocJump(lineIndex) {
   editor.scrollPosIntoView(charPos);
 
   // Also scroll preview to matching heading
-  const headings = preview.querySelectorAll('h1,h2,h3,h4,h5,h6');
-  if (headings[hIdx]) headings[hIdx].scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const previewHeadings = preview.querySelectorAll('h1,h2,h3,h4,h5,h6');
+  if (previewHeadings[hIdx]) previewHeadings[hIdx].scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   // Highlight active TOC item
   document.querySelectorAll('.toc-item').forEach(el => el.classList.remove('toc-active'));
   const active = document.querySelector(`.toc-item[data-line="${lineIndex}"]`);
   if (active) active.classList.add('toc-active');
 }
-
-// ── Sidebar TOC splitter drag ──────────────────────
-(function() {
-  const splitter  = document.getElementById('sidebar-splitter');
-  const notesList = document.getElementById('notes-list');
-  const tocPanel  = document.getElementById('toc-panel');
-  let dragging = false;
-  let startY, startNotesH, startTocH;
-
-  splitter.addEventListener('mousedown', e => {
-    dragging = true;
-    startY = e.clientY;
-    startNotesH = notesList.offsetHeight;
-    startTocH   = tocPanel.offsetHeight;
-    splitter.classList.add('dragging');
-    document.body.style.userSelect = 'none';
-    document.body.style.cursor = 'row-resize';
-  });
-
-  document.addEventListener('mousemove', e => {
-    if (!dragging) return;
-    const dy = e.clientY - startY;
-    const newNotesH = Math.max(60, startNotesH + dy);
-    const newTocH   = Math.max(60, startTocH   - dy);
-    notesList.style.flex = 'none';
-    notesList.style.height = newNotesH + 'px';
-    tocPanel.style.flex = 'none';
-    tocPanel.style.height = newTocH + 'px';
-  });
-
-  document.addEventListener('mouseup', () => {
-    if (!dragging) return;
-    dragging = false;
-    splitter.classList.remove('dragging');
-    document.body.style.userSelect = '';
-    document.body.style.cursor = '';
-  });
-})();
 
 const copyRaw = (() => {
   const btn = document.getElementById('btn-copy');
@@ -1456,6 +1433,22 @@ const copyRaw = (() => {
       btn.style.color       = 'var(--green)';
       btn.style.borderColor = 'var(--green)';
       btn.style.background  = 'rgba(63,185,80,0.12)';
+      btn.style.opacity     = '1';
+      restoreTimer = setTimeout(() => {
+        btn.textContent = prevText;
+        btn.setAttribute('style', prevStyle);
+        restoreTimer = null;
+      }, 1500);
+    }).catch(() => {
+      if (restoreTimer === null) {
+        prevText  = btn.textContent;
+        prevStyle = btn.getAttribute('style') || '';
+      }
+      clearTimeout(restoreTimer);
+      btn.textContent       = '✕ failed';
+      btn.style.color       = 'var(--red)';
+      btn.style.borderColor = 'var(--red)';
+      btn.style.background  = 'rgba(248,81,73,0.12)';
       btn.style.opacity     = '1';
       restoreTimer = setTimeout(() => {
         btn.textContent = prevText;
@@ -1485,14 +1478,19 @@ function setViewMode(mode) {
   rp.style.width = '';
   rp.style.flex  = '';
 
-  const display = {
-    editor:  { lp: 'flex', rp: 'none', dv: 'none' },
-    preview: { lp: 'none', rp: 'flex', dv: 'none' },
-    both:    { lp: 'flex', rp: 'flex', dv: ''     },
-  }[mode] || { lp: 'flex', rp: 'flex', dv: '' };
-  lp.style.display = display.lp;
-  rp.style.display = display.rp;
-  dv.style.display = display.dv;
+  const show = {
+    editor:  { lp: true,  rp: false, dv: false },
+    preview: { lp: false, rp: true,  dv: false },
+    both:    { lp: true,  rp: true,  dv: true  },
+  }[mode] || { lp: true, rp: true, dv: true };
+
+  // Toggle Bootstrap's d-flex class rather than fighting its display:flex !important
+  // with an inline style — the inline style loses against !important.
+  lp.classList.toggle('d-flex', show.lp);
+  rp.classList.toggle('d-flex', show.rp);
+  lp.style.display = show.lp ? '' : 'none';
+  rp.style.display = show.rp ? '' : 'none';
+  dv.style.display = show.dv ? '' : 'none';
 
   // Update button active states
   ['editor','both','preview'].forEach(m => {
@@ -1759,6 +1757,11 @@ function loadConfig() {
   return JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
 }
 
+// Must run before init() — preload classes use !important CSS that overrides
+// the inline display styles setViewMode() applies to the panes. Removing them
+// first means the restored view mode actually takes effect.
+clearPreloadClasses();
+
 (function init() {
   // Load notes index
   try {
@@ -2005,8 +2008,6 @@ Object.assign(window, {
     insertText('\n' + lines.join('\n') + '\n');
   }
 })();
-
-clearPreloadClasses();
 
 } // ── end boot() ──
 

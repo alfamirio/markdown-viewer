@@ -164,10 +164,11 @@ html, body {
 
 #sidebar-header span {
   font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
   text-transform: uppercase;
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
 
 .sidebar-header-btns { display: flex; align-items: center; gap: 2px; }
@@ -218,8 +219,8 @@ html, body {
 .note-name {
   flex: 1;
   font-family: var(--mono);
-  font-size: 12px;
-  color: var(--text-muted);
+  font-size: 12.5px;
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -298,10 +299,11 @@ html, body {
 
 #toc-header span {
   font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
   text-transform: uppercase;
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
 #btn-toc-toggle {
   padding: 1px 6px;
@@ -331,8 +333,8 @@ html, body {
 .toc-item {
   display: block;
   font-family: var(--mono);
-  font-size: 11.5px;
-  color: var(--text-muted);
+  font-size: 12px;
+  color: var(--text);
   padding: 3px 10px;
   cursor: pointer;
   white-space: nowrap;
@@ -345,9 +347,9 @@ html, body {
 .toc-item:hover { color: var(--text); background: var(--border); }
 .toc-item.toc-active { color: var(--accent); border-left-color: var(--accent); background: var(--accent-dim); }
 .toc-h1 { padding-left: 10px; color: var(--text); font-weight: 600; }
-.toc-h2 { padding-left: 18px; }
-.toc-h3 { padding-left: 26px; font-size: 11px; color: var(--text-dim); }
-.toc-h4, .toc-h5, .toc-h6 { padding-left: 34px; font-size: 10.5px; color: var(--text-dim); }
+.toc-h2 { padding-left: 18px; color: var(--text-muted); }
+.toc-h3 { padding-left: 26px; font-size: 11.5px; color: var(--text-muted); }
+.toc-h4, .toc-h5, .toc-h6 { padding-left: 34px; font-size: 11px; color: var(--text-muted); }
 .toc-empty { font-family: var(--mono); font-size: 11px; color: var(--text-dim); padding: 10px 12px; font-style: italic; }
 
 /* ── Main editor area ──────────────────────────── */
@@ -804,8 +806,8 @@ kbd {
 #notes-empty {
   padding: 20px 14px;
   font-family: var(--mono);
-  font-size: 11px;
-  color: var(--text-dim);
+  font-size: 11.5px;
+  color: var(--text-muted);
   text-align: center;
   line-height: 1.6;
 }
