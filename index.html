@@ -1030,6 +1030,51 @@
     @media print {
       #warning-footer { display: none !important; }
     }
+  
+    /* ── Table picker ─────────────────────────────────── */
+    #table-picker {
+      position: fixed;
+      z-index: 10000;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 10px 6px;
+      box-shadow: 0 8px 24px #00000066;
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      user-select: none;
+    }
+    #table-picker.open { display: flex; }
+
+    #table-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 18px);
+      grid-template-rows: repeat(8, 18px);
+      gap: 3px;
+    }
+
+    .tg-cell {
+      width: 18px;
+      height: 18px;
+      border-radius: 2px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      transition: background 0.08s, border-color 0.08s;
+      cursor: default;
+    }
+    .tg-cell.hover {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+    }
+
+    #table-picker-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
   </style>
 </head>
 <body>
@@ -1102,8 +1147,18 @@
       <button class="btn" data-tip="Code block"     onclick="fmtBlock()">``` block</button>
       <button class="btn" data-tip="Horizontal rule" onclick="insertText('\n---\n')">— hr</button>
       <button class="btn" data-tip="Link"            onclick="insertLink()">🔗 link</button>
+
+      <div class="toolbar-sep"></div>
+
+      <button class="btn" id="btn-table" data-tip="Insert table">⊞ table</button>
     </div>
 
+  </div>
+
+  <!-- Table picker popup -->
+  <div id="table-picker">
+    <div id="table-grid"></div>
+    <div id="table-picker-label">0 × 0</div>
   </div>
 
   <!-- ── Body row ── -->
@@ -2931,6 +2986,84 @@ Object.assign(window, {
   function hide() {
     box.style.display = 'none';
     current = null;
+  }
+})();
+
+
+// ═══════════════════════════════════════════════════
+//  Table picker
+// ═══════════════════════════════════════════════════
+(function () {
+  const COLS = 8, ROWS = 8;
+  const picker  = document.getElementById('table-picker');
+  const grid    = document.getElementById('table-grid');
+  const label   = document.getElementById('table-picker-label');
+
+  // Build grid cells
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'tg-cell';
+      cell.dataset.r = r;
+      cell.dataset.c = c;
+      grid.appendChild(cell);
+    }
+  }
+
+  function highlight(rows, cols) {
+    grid.querySelectorAll('.tg-cell').forEach(cell => {
+      const r = +cell.dataset.r, c = +cell.dataset.c;
+      cell.classList.toggle('hover', r < rows && c < cols);
+    });
+    label.textContent = cols > 0 && rows > 0 ? `${cols} × ${rows}` : '0 × 0';
+  }
+
+  grid.addEventListener('mousemove', e => {
+    const cell = e.target.closest('.tg-cell');
+    if (!cell) return;
+    highlight(+cell.dataset.r + 1, +cell.dataset.c + 1);
+  });
+
+  grid.addEventListener('mouseleave', () => highlight(0, 0));
+
+  grid.addEventListener('click', e => {
+    const cell = e.target.closest('.tg-cell');
+    if (!cell) return;
+    const rows = +cell.dataset.r + 1;
+    const cols = +cell.dataset.c + 1;
+    close();
+    insertTable(rows, cols);
+  });
+
+  function close() {
+    picker.classList.remove('open');
+    document.removeEventListener('mousedown', outsideClick, true);
+  }
+
+  function outsideClick(e) {
+    if (!picker.contains(e.target) && e.target.id !== 'btn-table') close();
+  }
+
+  document.getElementById('btn-table').addEventListener('click', function(e) { window.openTablePicker(e); });
+
+  window.openTablePicker = function (e) {
+    const btn = e.currentTarget;
+    const rect = btn.getBoundingClientRect();
+    picker.style.left = rect.left + 'px';
+    picker.style.top  = (rect.bottom + 4) + 'px';
+    picker.classList.toggle('open');
+    if (picker.classList.contains('open')) {
+      highlight(0, 0);
+      setTimeout(() => document.addEventListener('mousedown', outsideClick, true), 0);
+    }
+  };
+
+  function insertTable(rows, cols) {
+    const header = '| ' + Array(cols).fill('Header').join(' | ') + ' |';
+    const sep    = '| ' + Array(cols).fill(':------').join(' | ') + ' |';
+    const row    = '| ' + Array(cols).fill('Cell').join(' | ') + ' |';
+    const lines  = [header, sep, ...Array(rows - 1).fill(row)];
+    insertText('\n' + lines.join('\n') + '\n');
   }
 })();
 
