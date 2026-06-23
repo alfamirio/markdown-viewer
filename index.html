@@ -434,7 +434,7 @@
     #divider:hover, #divider.dragging { background: var(--accent); }
     #divider::after { content: ''; position: absolute; inset: 0 -4px; }
 
-    /* ── Editor wrapper + line numbers ───────────────── */
+    /* ── Editor wrapper (hosts the CodeMirror 6 instance) ─ */
     #editor-wrap {
       flex: 1;
       display: flex;
@@ -443,78 +443,65 @@
       position: relative;
     }
 
-    /* Hidden mirror used only to measure how many visual rows each
-       logical line occupies once word-wrap folds it. Must match the
-       textarea's box model (font, padding, border, width) exactly. */
-    #wrap-mirror {
-      position: absolute;
-      visibility: hidden;
-      pointer-events: none;
-      top: 0; left: 0;
-      height: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
-      overflow-wrap: break-word;
-    }
-
-    #line-numbers {
-      flex-shrink: 0;
-      width: 44px;
-      padding: 0 0 20px;
-      background: var(--bg);
-      border-right: 1px solid var(--border);
-      overflow: hidden;
-      text-align: right;
-      pointer-events: none;
-      user-select: none;
-    }
-    #line-numbers span {
-      display: flex;
-      align-items: flex-start;
-      overflow: hidden;
-      font-family: var(--mono);
-      font-size: 13.5px;
-      line-height: 1.7;
-      color: var(--text-dim);
-      padding-right: 10px;
-      justify-content: flex-end;
-      transition: color 0.1s;
-    }
-    #line-numbers span.active-line {
-      color: var(--text-muted);
-    }
-
-    /* ── Editor textarea ──────────────────────────────── */
-    #editor-wrap { position: relative; }
-
-    #editor-text-wrap {
-      flex: 1;
-      position: relative;
-      overflow: hidden;
-      display: flex;
-    }
-
-    #editor {
+    /* ── CodeMirror 6 host container ──────────────────── */
+    #cm-host {
       flex: 1;
       min-width: 0;
-      background: transparent;
-      color: var(--text);
-      caret-color: var(--text);
+      overflow: hidden;
+      display: flex;
+    }
+
+    .cm-editor {
+      flex: 1;
+      min-width: 0;
+      background: transparent !important;
+      height: 100%;
       font-family: var(--mono);
       font-size: 13.5px;
-      line-height: 1.7;
-      padding: 20px 12px 20px 14px;
-      border: none;
-      outline: none;
-      resize: none;
+    }
+    .cm-editor.cm-focused { outline: none !important; }
+    .cm-scroller {
       overflow-y: auto;
-      tab-size: 2;
-      box-sizing: border-box;
+      overflow-x: auto;
+      line-height: 1.7 !important;
+      font-family: var(--mono) !important;
       scrollbar-width: thin;
       scrollbar-color: var(--divider) transparent;
     }
-    #editor::-webkit-scrollbar { width: 7px; }
-    #editor::-webkit-scrollbar-thumb { background: var(--divider); border-radius: 4px; }
+    .cm-scroller::-webkit-scrollbar { width: 7px; height: 7px; }
+    .cm-scroller::-webkit-scrollbar-thumb { background: var(--divider); border-radius: 4px; }
+    .cm-content {
+      padding: 20px 12px 20px 0 !important;
+      caret-color: var(--text);
+      color: var(--text);
+    }
+    .cm-line { padding: 0 12px 0 2px !important; }
+    .cm-gutters {
+      background: var(--bg) !important;
+      border-right: 1px solid var(--border) !important;
+      color: var(--text-dim) !important;
+    }
+    .cm-gutterElement { font-size: 13.5px; }
+    .cm-activeLineGutter {
+      background: transparent !important;
+      color: var(--text-muted) !important;
+    }
+    .cm-activeLine { background: var(--surface) !important; }
+    .cm-selectionBackground, .cm-editor.cm-focused .cm-selectionBackground {
+      background: var(--accent-dim) !important;
+    }
+    .cm-cursor { border-left-color: var(--text) !important; }
+    .cm-placeholder { color: var(--text-dim); font-style: normal; }
+    .cm-matchingBracket, .cm-nonmatchingBracket {
+      background: var(--accent-dim);
+      outline: 1px solid var(--accent);
+    }
+
+    /* Word wrap toggle — applies to the CM scroller/lines */
+    #cm-host.no-wrap .cm-content,
+    #cm-host.no-wrap .cm-line { white-space: pre !important; }
+    #cm-host.wrap .cm-content,
+    #cm-host.wrap .cm-line { white-space: pre-wrap !important; word-break: break-word !important; }
 
     /* ── Preview ──────────────────────────────────────── */
     #preview {
@@ -695,8 +682,7 @@
     }
 
     /* ── Word wrap ────────────────────────────────────── */
-    #editor.wrap    { white-space: pre-wrap; word-break: break-word; }
-    #editor.no-wrap { white-space: pre; word-break: normal; overflow-x: auto; }
+    /* (CodeMirror wrap/no-wrap rules are defined above, near .cm-editor) */
 
     /* ── Empty sidebar state ──────────────────────────── */
     #notes-empty {
@@ -960,6 +946,7 @@
     <div class="toolbar-sep"></div>
 
     <button class="btn" id="btn-wrap" data-tip="Toggle word wrap" onclick="toggleWrap()">wrap</button>
+    <button class="btn active" id="btn-highlight" data-tip="Toggle syntax highlighting" onclick="toggleHighlight()">highlight</button>
 
     <div class="toolbar-sep"></div>
 
@@ -1025,11 +1012,7 @@
         <div class="pane" id="left-pane">
           <div class="pane-label"><span class="dot dot-editor"></span>editor</div>
           <div id="editor-wrap">
-            <div id="line-numbers"></div>
-            <div id="editor-text-wrap">
-              <textarea id="editor" class="wrap" spellcheck="false" placeholder="Start writing Markdown here…"></textarea>
-            </div>
-            <div id="wrap-mirror"></div>
+            <div id="cm-host" class="wrap"></div>
           </div>
         </div>
 
@@ -1063,7 +1046,7 @@
 <div id="pdf-progress"><span class="spin"></span><span id="pdf-progress-text">Rendering PDF…</span></div>
 
 
-<!-- marked + highlight.js -->
+<!-- marked -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
 
 <!-- Mermaid diagrams -->
@@ -1072,7 +1055,214 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
+<!-- ── CodeMirror 6 (ESM via esm.sh) ──────────────────── -->
+<script type="importmap">
+{
+  "imports": {
+    "@codemirror/": "https://esm.sh/*@codemirror/",
+    "@lezer/": "https://esm.sh/*@lezer/",
+    "codemirror": "https://esm.sh/*codemirror",
+    "style-mod": "https://esm.sh/style-mod",
+    "w3c-keyname": "https://esm.sh/w3c-keyname",
+    "crelt": "https://esm.sh/crelt",
+    "@marijn/find-cluster-break": "https://esm.sh/@marijn/find-cluster-break"
+  }
+}
+</script>
+
+<script type="module">
+  // ── CodeMirror 6 setup ──────────────────────────────
+  // Builds the editor instance and exposes a small shim on
+  // window.editor that mimics the <textarea> API surface the rest of
+  // the app (written before this rewrite) was built against —
+  // .value, .selectionStart/.selectionEnd, .setSelectionRange(),
+  // .scrollTop/.scrollHeight/.clientHeight/.clientWidth, .focus(),
+  // .className, and addEventListener('input'|'scroll'|'keydown'|'keyup'|'click').
+  // This lets fmt(), hotkeys, autosave, TOC jump, PDF export, etc.
+  // keep working with little to no change.
+  import { EditorView, keymap, placeholder, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection } from "@codemirror/view";
+  import { EditorState, Compartment, Annotation } from "@codemirror/state";
+  import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+  import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+  import { languages } from "@codemirror/language-data";
+  import { syntaxHighlighting, HighlightStyle, bracketMatching } from "@codemirror/language";
+  import { tags } from "@lezer/highlight";
+
+  // Highlight style mapped onto this app's existing CSS color tokens
+  // (read live so it still respects the page's design tokens).
+  const css = getComputedStyle(document.documentElement);
+  const tok = name => css.getPropertyValue(name).trim();
+  const mdHighlightStyle = HighlightStyle.define([
+    { tag: tags.heading,                 color: tok('--accent'), fontWeight: '600' },
+    { tag: tags.heading1,                color: tok('--accent'), fontWeight: '700' },
+    { tag: tags.strong,                  fontWeight: '700', color: tok('--text') },
+    { tag: tags.emphasis,                fontStyle: 'italic', color: tok('--text') },
+    { tag: tags.strikethrough,           textDecoration: 'line-through', color: tok('--text-muted') },
+    { tag: tags.link,                    color: tok('--accent'), textDecoration: 'underline' },
+    { tag: tags.url,                     color: tok('--accent') },
+    { tag: tags.quote,                   color: tok('--text-muted'), fontStyle: 'italic' },
+    { tag: tags.monospace,               color: tok('--orange') },
+    { tag: tags.processingInstruction,   color: tok('--text-dim') }, // markup chars: #, *, `, etc.
+    { tag: tags.meta,                    color: tok('--text-dim') },
+    { tag: tags.list,                    color: tok('--green') },
+    { tag: tags.contentSeparator,        color: tok('--divider') },
+    { tag: tags.comment,                 color: tok('--text-dim'), fontStyle: 'italic' },
+    { tag: tags.keyword,                 color: tok('--accent') },
+    { tag: tags.atom,                    color: tok('--orange') },
+    { tag: tags.number,                  color: tok('--orange') },
+    { tag: tags.string,                  color: tok('--green') },
+    { tag: tags.variableName,            color: tok('--text') },
+    { tag: tags.propertyName,            color: tok('--accent') },
+    { tag: tags.typeName,                color: tok('--accent') },
+    { tag: tags.operator,                color: tok('--text-muted') },
+    { tag: tags.bracket,                 color: tok('--text-muted') },
+    { tag: tags.tagName,                 color: tok('--accent') },
+    { tag: tags.attributeName,           color: tok('--orange') },
+  ]);
+
+  // Compartments let us flip wrap / highlighting on and off at runtime
+  // without tearing down and rebuilding the whole editor state.
+  const wrapCompartment      = new Compartment();
+  const highlightCompartment = new Compartment();
+
+  const highlightExt = syntaxHighlighting(mdHighlightStyle);
+
+  // Tags transactions made by our own shim methods (.value = ..., _splice)
+  // so the update listener below can mirror a real <textarea>'s behavior:
+  // firing the 'input' callback only for changes that came from the user
+  // typing/pasting, not from code setting .value directly (callers of
+  // .value = already call render()/scheduleSave() themselves where needed,
+  // e.g. switchNote()).
+  const programmatic = Annotation.define();
+
+  // defaultKeymap binds a few combos this app already uses for its own
+  // hotkeys (Mod-i → italic, Mod-]/Mod-[ → next/prev note, Shift-Mod-k →
+  // code block). Drop just those bindings so CM6's own keymap handling
+  // doesn't fire alongside — and sometimes race against — handleKeys()
+  // for the same keystroke; everything else in defaultKeymap (line
+  // move/copy, escape, Mod-Enter, etc.) is kept since it doesn't collide.
+  const RESERVED_BY_APP = new Set(['Mod-i', 'Mod-]', 'Mod-[', 'Shift-Mod-k', 'Shift-Mod-K']);
+  const safeDefaultKeymap = defaultKeymap.filter(b => !RESERVED_BY_APP.has(b.key) && !RESERVED_BY_APP.has(b.mac));
+
+  const view = new EditorView({
+    parent: document.getElementById('cm-host'),
+    state: EditorState.create({
+      doc: '',
+      extensions: [
+        lineNumbers(),
+        highlightActiveLine(),
+        highlightActiveLineGutter(),
+        drawSelection(),
+        bracketMatching(),
+        history(),
+        keymap.of([...safeDefaultKeymap, ...historyKeymap]),
+        markdown({ base: markdownLanguage, codeLanguages: languages }),
+        highlightCompartment.of(highlightExt),
+        wrapCompartment.of(EditorView.lineWrapping),
+        placeholder('Start writing Markdown here…'),
+        EditorView.updateListener.of(update => {
+          if (update.docChanged && !update.transactions.some(tr => tr.annotation(programmatic))) {
+            window.editor._fireInput();
+          }
+        }),
+      ],
+    }),
+  });
+
+  // Forward native scroll events from CM's internal scroller. Keydown/keyup/
+  // click are listened on contentDOM, since that's the element CodeMirror's
+  // own DOM events (typing, clicking, key handling) actually fire on.
+  view.scrollDOM.addEventListener('scroll', () => window.editor._fireScroll());
+  view.contentDOM.addEventListener('click', () => window.editor._fireClick());
+  view.contentDOM.addEventListener('keyup', e => window.editor._fireKeyup(e));
+  view.contentDOM.addEventListener('keydown', e => window.editor._fireKeydown(e));
+
+  // ── Textarea-compatibility shim ─────────────────────
+  const listeners = { input: [], scroll: [], click: [], keyup: [], keydown: [] };
+
+  window.editor = {
+    _view: view,
+    _wrapCompartment: wrapCompartment,
+    _highlightCompartment: highlightCompartment,
+    _highlightExt: highlightExt,
+
+    get value() { return view.state.doc.toString(); },
+    set value(v) {
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: v },
+        annotations: programmatic.of(true),
+      });
+    },
+
+    get selectionStart() { return view.state.selection.main.from; },
+    get selectionEnd()   { return view.state.selection.main.to; },
+    setSelectionRange(start, end) {
+      const len = view.state.doc.length;
+      start = Math.max(0, Math.min(start, len));
+      end   = Math.max(0, Math.min(end, len));
+      view.dispatch({ selection: { anchor: start, head: end }, scrollIntoView: true });
+    },
+
+    get scrollTop() { return view.scrollDOM.scrollTop; },
+    set scrollTop(v) { view.scrollDOM.scrollTop = v; },
+    get scrollHeight() { return view.scrollDOM.scrollHeight; },
+    get clientHeight() { return view.scrollDOM.clientHeight; },
+    get clientWidth()  { return view.scrollDOM.clientWidth; },
+
+    focus() { view.focus(); },
+
+    set className(cls) {
+      const host = document.getElementById('cm-host');
+      host.classList.remove('wrap', 'no-wrap');
+      if (cls) host.classList.add(cls);
+    },
+    get className() { return document.getElementById('cm-host').className; },
+
+    addEventListener(type, fn) {
+      if (listeners[type]) listeners[type].push(fn);
+    },
+
+    // Insert text at [start, end), replacing any existing range —
+    // used by fmt()/fmtLine()/insertText() via spliceText().
+    _splice(start, end, text) {
+      view.dispatch({
+        changes: { from: start, to: end, insert: text },
+        selection: { anchor: start + text.length },
+      });
+      view.focus();
+    },
+
+    _fireInput()     { listeners.input.forEach(fn => fn()); },
+    _fireScroll()    { listeners.scroll.forEach(fn => fn()); },
+    _fireClick()     { listeners.click.forEach(fn => fn()); },
+    _fireKeyup(e)    { listeners.keyup.forEach(fn => fn(e)); },
+    _fireKeydown(e)  { listeners.keydown.forEach(fn => fn(e)); },
+    _fireSelection() { /* hook point if selection-only updates are ever needed */ },
+
+    // Scroll so the line containing `pos` sits roughly a third of the
+    // way down the viewport — used by tocJump(). Uses CM6's own layout
+    // info (lineBlockAt) so it's exact even with wrapped lines, unlike
+    // a manual lineHeight × lineNumber estimate.
+    scrollPosIntoView(pos) {
+      const block = view.lineBlockAt(pos);
+      view.scrollDOM.scrollTop = block.top - view.scrollDOM.clientHeight / 3;
+    },
+  };
+
+  // ── Wrap / highlight toggles (called from toggleWrap/toggleHighlight) ──
+  window.editor.setWrap = on => {
+    view.dispatch({ effects: wrapCompartment.reconfigure(on ? EditorView.lineWrapping : []) });
+  };
+  window.editor.setHighlight = on => {
+    view.dispatch({ effects: highlightCompartment.reconfigure(on ? highlightExt : []) });
+  };
+
+  window.__cmReady = true;
+  window.dispatchEvent(new Event('cm-ready'));
+</script>
+
 <script>
+function boot() {
 // ═══════════════════════════════════════════════════
 //  Constants & element refs
 // ═══════════════════════════════════════════════════
@@ -1080,12 +1270,13 @@ const NOTES_INDEX_KEY = 'md_notes_index';   // JSON array of {id, name}
 const CONFIG_KEY      = 'md_config';         // UI state: wrap, highlight, sidebar, toc, viewMode
 const noteContent     = id => 'md_note_' + id;
 
-const editor       = document.getElementById('editor');
+const editor       = window.editor; // CodeMirror 6 compatibility shim — see module script above
 const preview      = document.getElementById('preview');
 const saveEl       = document.getElementById('save-indicator');
 const wordEl       = document.getElementById('word-count');
 const lineEl       = document.getElementById('line-count');
 const btnWrap      = document.getElementById('btn-wrap');
+const btnHighlight = document.getElementById('btn-highlight');
 const notesList    = document.getElementById('notes-list');
 const noteTitleEl  = document.getElementById('note-title-input');
 const btnSidebar   = document.getElementById('btn-sidebar');
@@ -1243,8 +1434,6 @@ function renderSidebar() {
 function toggleSidebar() {
   document.getElementById('sidebar').classList.toggle('collapsed');
   btnSidebar.classList.toggle('active');
-  mirrorMetricsDirty = true;
-  setTimeout(() => { mirrorMetricsDirty = true; if (wrapOn) updateLineNumbers(); }, 200);
   saveConfig();
 }
 
@@ -1329,91 +1518,10 @@ function render() {
   // Render Mermaid diagrams
   mermaid.run({ nodes: preview.querySelectorAll('.mermaid') }).catch(() => {});
   updateStatus();
-  updateLineNumbers();
   updateToc();
 }
 
 
-
-// ═══════════════════════════════════════════════════
-//  Line-number gutter (wrap-aware)
-// ═══════════════════════════════════════════════════
-const wrapMirror = document.getElementById('wrap-mirror');
-let mirrorMetricsDirty = true;
-
-// Copy the textarea's exact box model onto the mirror so wrapped
-// row counts measured there match what's rendered on screen.
-// Only horizontal padding matters here — it affects where lines fold.
-// Vertical padding must NOT be copied, since the gutter already has
-// its own matching top/bottom padding applied once for the whole column.
-function syncMirrorMetrics() {
-  const cs = getComputedStyle(editor);
-  const pl = parseFloat(cs.paddingLeft)  || 0;
-  const pr = parseFloat(cs.paddingRight) || 0;
-  // editor is border-box: clientWidth includes padding, so subtract it to get content width
-  wrapMirror.style.width        = (editor.clientWidth - pl - pr) + 'px';
-  wrapMirror.style.padding      = '0';
-  wrapMirror.style.border       = 'none';
-  wrapMirror.style.boxSizing    = 'content-box';
-  wrapMirror.style.fontSize     = cs.fontSize;
-  wrapMirror.style.fontFamily   = cs.fontFamily;
-  wrapMirror.style.fontWeight   = cs.fontWeight;
-  wrapMirror.style.lineHeight   = cs.lineHeight;
-  wrapMirror.style.letterSpacing = cs.letterSpacing;
-  wrapMirror.style.tabSize      = cs.tabSize;
-  wrapMirror.style.whiteSpace   = wrapOn ? 'pre-wrap' : 'pre';
-  wrapMirror.style.wordBreak    = 'break-word';
-  wrapMirror.style.overflowWrap = 'break-word';
-  mirrorMetricsDirty = false;
-}
-
-function updateLineNumbers() {
-  const ln = document.getElementById('line-numbers');
-  if (!ln) return;
-  if (mirrorMetricsDirty) syncMirrorMetrics();
-
-  const cs   = getComputedStyle(editor);
-  const rowH = parseFloat(cs.lineHeight) || 22.95;
-  const ptop = parseFloat(cs.paddingTop) || 0;
-
-  // Sync gutter top padding to textarea's exact computed padding-top
-  ln.style.paddingTop = ptop + 'px';
-
-  const lines = editor.value.split('\n');
-  const cursorLine = editor.value.substring(0, editor.selectionStart).split('\n').length;
-
-  // Measure how many visual rows each logical line takes once wrapped.
-  let rowCounts;
-  if (wrapOn) {
-    // Use mirror content width (already set in syncMirrorMetrics) to estimate
-    // chars per row — but use a conservative threshold so borderline lines
-    // always go through the mirror rather than being wrongly skipped.
-    const mirrorW = parseFloat(wrapMirror.style.width) || 999;
-    const charW   = parseFloat(cs.fontSize) * 0.601; // monospace ~0.6× em
-    const approxCharsPerRow = Math.max(10, Math.floor(mirrorW / charW));
-    rowCounts = lines.map(line => {
-      if (line.length < approxCharsPerRow * 0.75) return 1; // safely short
-      wrapMirror.textContent = line || ' ';
-      return Math.max(1, Math.round(wrapMirror.scrollHeight / rowH));
-    });
-  } else {
-    rowCounts = lines.map(() => 1);
-  }
-
-  ln.innerHTML = '';
-  const frag = document.createDocumentFragment();
-  lines.forEach((line, i) => {
-    const s = document.createElement('span');
-    s.textContent = i + 1;
-    s.style.height = (rowCounts[i] * rowH) + 'px';
-    if (i + 1 === cursorLine) s.className = 'active-line';
-    frag.appendChild(s);
-  });
-  ln.appendChild(frag);
-
-  // Keep gutter scroll in sync
-  ln.scrollTop = editor.scrollTop;
-}
 
 // ═══════════════════════════════════════════════════
 //  Synchronized scrolling
@@ -1422,7 +1530,6 @@ let suppressEditorScroll  = false;
 let suppressPreviewScroll = false;
 
 editor.addEventListener('scroll', () => {
-  document.getElementById('line-numbers').scrollTop = editor.scrollTop;
   if (suppressEditorScroll) return;
   const pct = editor.scrollTop / (editor.scrollHeight - editor.clientHeight || 1);
   suppressPreviewScroll = true;
@@ -1462,12 +1569,6 @@ function scheduleSave() {
 }
 
 editor.addEventListener('input', () => { render(); scheduleSave(); });
-editor.addEventListener('click', updateLineNumbers);
-editor.addEventListener('keyup', e => {
-  // Only update highlight on navigation keys (not every character to save work)
-  const nav = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End','PageUp','PageDown'];
-  if (nav.includes(e.key)) updateLineNumbers();
-});
 
 // Title input
 noteTitleEl.addEventListener('input', e => {
@@ -1522,9 +1623,11 @@ function handleKeys(e) {
 
 // Global shortcuts (outside editor too)
 document.addEventListener('keydown', e => {
-  // ? opens hotkey modal (only when not typing in an input/textarea)
+  // ? opens hotkey modal (only when not typing in an input/textarea,
+  // or in the CodeMirror editor itself — its content is a contenteditable
+  // div, not an INPUT/TEXTAREA, so it needs its own check here)
   const tag = document.activeElement.tagName;
-  const isInput = tag === 'INPUT' || tag === 'TEXTAREA';
+  const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement.isContentEditable;
   if (!isInput && e.key === '?') { e.preventDefault(); openHkModal(); return; }
   if (e.key === 'Escape') { closeHkModal(); return; }
 
@@ -1614,9 +1717,7 @@ function insertText(text) {
 }
 
 function spliceText(start, end, text) {
-  editor.focus();
-  editor.setSelectionRange(start, end);
-  document.execCommand('insertText', false, text);
+  editor._splice(start, end, text);
   render();
   scheduleSave();
 }
@@ -1630,8 +1731,18 @@ function toggleWrap() {
   editor.className = wrapOn ? 'wrap' : 'no-wrap';
   preview.className = wrapOn ? 'wrap' : 'no-wrap';
   btnWrap.classList.toggle('active', wrapOn);
-  mirrorMetricsDirty = true;
-  updateLineNumbers();
+  editor.setWrap(wrapOn);
+  saveConfig();
+}
+
+// ═══════════════════════════════════════════════════
+//  Markdown syntax highlighting (CodeMirror 6)
+// ═══════════════════════════════════════════════════
+let highlightOn = true;
+function toggleHighlight() {
+  highlightOn = !highlightOn;
+  btnHighlight.classList.toggle('active', highlightOn);
+  editor.setHighlight(highlightOn);
   saveConfig();
 }
 
@@ -2021,9 +2132,8 @@ function tocJump(lineIndex) {
   editor.focus();
   editor.setSelectionRange(charPos, charPos);
 
-  // Scroll editor to that line
-  const lineHeight = parseFloat(getComputedStyle(editor).lineHeight);
-  editor.scrollTop = lineIndex * lineHeight - editor.clientHeight / 3;
+  // Scroll editor to that line (exact, wrap-aware — see scrollPosIntoView)
+  editor.scrollPosIntoView(charPos);
 
   // Also scroll preview to matching heading
   const headings = preview.querySelectorAll('h1,h2,h3,h4,h5,h6');
@@ -2126,8 +2236,6 @@ function setViewMode(mode) {
     document.getElementById('btn-view-' + m).classList.toggle('active', m === mode);
   });
 
-  mirrorMetricsDirty = true;
-  if (wrapOn) updateLineNumbers();
   saveConfig();
 }
 // ═══════════════════════════════════════════════════
@@ -2150,8 +2258,6 @@ document.addEventListener('mousemove', e => {
   leftPane.style.width = pct + '%';
   rightPane.style.flex  = 'none';
   rightPane.style.width = (100 - pct) + '%';
-  mirrorMetricsDirty = true;
-  if (wrapOn) updateLineNumbers();
 });
 document.addEventListener('mouseup', () => {
   if (!dragging) return;
@@ -2159,8 +2265,6 @@ document.addEventListener('mouseup', () => {
   divider.classList.remove('dragging');
   document.body.style.cursor = '';
   document.body.style.userSelect = '';
-  mirrorMetricsDirty = true;
-  if (wrapOn) updateLineNumbers();
 });
 
 // ═══════════════════════════════════════════════════
@@ -2296,6 +2400,7 @@ function resetAllData() {
 function saveConfig() {
   const cfg = {
     wrap:             wrapOn,
+    highlight:        highlightOn,
     sidebar:          !document.getElementById('sidebar').classList.contains('collapsed'),
     toc:              tocVisible,
     viewMode:         currentViewMode,
@@ -2352,6 +2457,12 @@ function dismissWarning() {
     editor.className  = wrapOn ? 'wrap' : 'no-wrap';
     preview.className = wrapOn ? 'wrap' : 'no-wrap';
     btnWrap.classList.toggle('active', wrapOn);
+    editor.setWrap(wrapOn);
+
+    // highlight
+    highlightOn = cfg.highlight !== false;
+    btnHighlight.classList.toggle('active', highlightOn);
+    editor.setHighlight(highlightOn);
 
     // sidebar
     if (cfg.sidebar === false) {
@@ -2376,15 +2487,6 @@ function dismissWarning() {
   } catch(e) {}
 })();
 
-// Keep the gutter's wrapped-row measurements correct when the window
-// itself is resized (debounced to avoid thrashing on every pixel).
-let resizeTimer;
-window.addEventListener('resize', () => {
-  mirrorMetricsDirty = true;
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { if (wrapOn) updateLineNumbers(); }, 100);
-});
-
 // ═══════════════════════════════════════════════════
 //  Hotkeys modal
 // ═══════════════════════════════════════════════════
@@ -2395,6 +2497,27 @@ function openHkModal() {
 function closeHkModal() {
   document.getElementById('hk-overlay').classList.remove('open');
 }
+
+// ═══════════════════════════════════════════════════
+//  Expose functions referenced by inline onclick/oninput/onchange
+//  HTML attributes — those run in global scope, but everything in
+//  this file now lives inside boot() to delay startup until the
+//  CodeMirror module (loaded separately as type="module") is ready.
+// ═══════════════════════════════════════════════════
+Object.assign(window, {
+  closeHkModal, copyRaw, createNote, dismissWarning, downloadMd, exportPdf,
+  fmt, fmtBlock, fmtLine, insertLink, insertText, loadMd, openHkModal,
+  resetAllData, setViewMode, tocJump, toggleHighlight, toggleSidebar,
+  toggleToc, toggleWrap, renameCurrentNote, onMdFileLoad,
+});
+
+} // ── end boot() ──
+
+// Start the app once the CodeMirror module has finished setting up
+// window.editor (handles both orderings: module finishes first, or
+// this classic script's listener attaches first).
+if (window.__cmReady) boot();
+else window.addEventListener('cm-ready', boot, { once: true });
 </script>
 
 <!-- ── Hotkeys modal ── -->
