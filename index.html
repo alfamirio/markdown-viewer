@@ -513,12 +513,12 @@
       color: transparent;
       background: transparent;
       box-sizing: border-box;
-      z-index: 2;
+      z-index: 1;
     }
 
     #editor {
       position: relative;
-      z-index: 1;
+      z-index: 2;
       flex: 1;
       min-width: 0;
       background: transparent;
@@ -537,14 +537,14 @@
       scrollbar-width: thin;
       scrollbar-color: var(--divider) transparent;
     }
-    /* Hide native selection — we render it in the overlay */
-    #editor::selection      { background: transparent; color: transparent; }
-    #editor::-moz-selection { background: transparent; color: transparent; }
+    /* Hide native selection; overlay paints its own selection background */
+    #editor.hl-selection-off::selection      { background: transparent; color: transparent; }
+    #editor.hl-selection-off::-moz-selection { background: transparent; color: transparent; }
     #editor::-webkit-scrollbar { width: 7px; }
     #editor::-webkit-scrollbar-thumb { background: var(--divider); border-radius: 4px; }
 
     /* Selection spans rendered inside the overlay */
-    .md-sel { background: #1f4068; border-radius: 1px; }
+    .md-sel { background: #264f78; border-radius: 1px; display: inline; color: inherit; }
 
     /* ── Markdown syntax colours ──────────────────────── */
     .md-h1         { color: #ff7b72; font-weight: 700; }
@@ -554,15 +554,15 @@
     .md-h5         { color: #79c0ff; font-weight: 600; }
     .md-h6         { color: #bc8cff; font-weight: 600; }
     .md-bold       { color: #ffffff; font-weight: 700; }
-    .md-italic     { color: #ffa8a8; font-style: italic; }
+    .md-italic     { color: #ffb3b3; font-style: italic; }
     .md-strike     { color: #6e7681; text-decoration: line-through; }
-    .md-code       { color: #f0883e; background: #2d1f0e; border-radius: 3px; padding: 0 3px; }
+    .md-code       { color: #e8965a; }
     .md-codeblock  { color: #adbac7; }
     .md-codeblock-lang { color: #79c0ff; font-weight: 600; }
     .md-codeblock-lang-mermaid { color: #bc8cff; font-weight: 600; }
     .md-blockquote { color: #bc8cff; border-left: none; }
     .md-link-text  { color: #58a6ff; }
-    .md-link-url   { color: #3fb950; }
+    .md-link-url   { color: #58a6ff; }
     .md-image      { color: #f778ba; }
     .md-hr         { color: #3d444d; }
     .md-list       { color: #f0c93a; font-weight: 700; }
@@ -1081,7 +1081,7 @@
             <div id="line-numbers"></div>
             <div id="editor-text-wrap">
               <div id="editor-highlight" aria-hidden="true"></div>
-              <textarea id="editor" class="wrap" spellcheck="false" placeholder="Start writing Markdown here…"></textarea>
+              <textarea id="editor" class="wrap hl-selection-off" spellcheck="false" placeholder="Start writing Markdown here…"></textarea>
             </div>
             <div id="wrap-mirror"></div>
           </div>
@@ -1332,25 +1332,43 @@ mermaid.initialize({
 //  marked config
 // ═══════════════════════════════════════════════════
 
-// Custom renderer: turn ```mermaid blocks into placeholder divs
-const mermaidRenderer = new marked.Renderer();
-const originalCode = mermaidRenderer.code.bind(mermaidRenderer);
-mermaidRenderer.code = function(code, lang) {
-  if ((lang || '').trim().toLowerCase() === 'mermaid') {
-    const id = 'mmd-' + Math.random().toString(36).slice(2, 8);
-    return `<div class="mermaid-wrap"><div class="mermaid" id="${id}">${code}</div></div>`;
-  }
-  return originalCode(code, lang);
-};
+// Mermaid extension — intercepts ```mermaid fenced blocks before the
+// default code renderer runs, turning them into placeholder divs that
+// mermaid.run() will later render into SVGs.
+marked.use({
+  extensions: [{
+    name: 'mermaid',
+    level: 'block',
+    start(src) { return src.indexOf('```mermaid'); },
+    tokenizer(src) {
+      const match = src.match(/^(`{3,})mermaid\n([\s\S]*?)\1(?:\n|$)/);
+      if (match) return { type: 'mermaid', raw: match[0], text: match[2].trim() };
+    },
+    renderer(token) {
+      const id = 'mmd-' + Math.random().toString(36).slice(2, 8);
+      // Escape HTML entities so Mermaid receives clean diagram source
+      const safe = token.text
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      return `<div class="mermaid-wrap"><div class="mermaid" id="${id}">${safe}</div></div>\n`;
+    }
+  }]
+});
 
-marked.setOptions({
-  renderer: mermaidRenderer,
-  highlight(code, lang) {
-    if (lang && hljs.getLanguage(lang)) return hljs.highlight(code, { language: lang }).value;
-    return hljs.highlightAuto(code).value;
-  },
+// Highlight.js integration + global options via the modern marked.use() API
+marked.use({
   breaks: true,
   gfm: true,
+  renderer: {
+    code(code, lang) {
+      // mermaid blocks are handled by the extension above; skip here
+      if ((lang || '').trim().toLowerCase() === 'mermaid') return false;
+      const highlighted = (lang && hljs.getLanguage(lang))
+        ? hljs.highlight(code, { language: lang, ignoreIllegals: true }).value
+        : hljs.highlightAuto(code).value;
+      const cls = lang ? ` class="language-${lang}"` : '';
+      return `<pre><code${cls}>${highlighted}</code></pre>\n`;
+    }
+  }
 });
 
 // ═══════════════════════════════════════════════════
@@ -1359,6 +1377,15 @@ marked.setOptions({
 function render() {
   preview.innerHTML = marked.parse(editor.value);
   preview.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = false);
+  preview.querySelectorAll('img').forEach(img => {
+    img.onerror = () => {
+      img.style.display = 'none';
+      const note = document.createElement('span');
+      note.style.cssText = 'display:inline-block;padding:4px 8px;border-radius:4px;background:#1c2128;color:#484f58;font-family:monospace;font-size:12px;border:1px solid #30363d';
+      note.textContent = '⚠ image blocked or unavailable: ' + (img.alt || img.src);
+      img.parentNode.insertBefore(note, img.nextSibling);
+    };
+  });
   // Render Mermaid diagrams
   mermaid.run({ nodes: preview.querySelectorAll('.mermaid') }).catch(() => {});
   updateStatus();
@@ -1453,10 +1480,11 @@ function inlineHighlight(text) {
         i = end + 2; continue;
       }
     }
-    // Italic  *...* or _..._
-    if ((s[i]==='*' || s[i]==='_') && s[i+1] && s[i+1]!==s[i]) {
-      const end = s.indexOf(s[i], i+1);
-      if (end !== -1) {
+    // Italic  *...* or _..._ (only single marker, not part of ** or __)
+    if ((s[i]==='*' || s[i]==='_') && s[i+1] && s[i+1]!==s[i] && (i===0 || s[i-1]!==s[i])) {
+      const marker = s[i];
+      const end = s.indexOf(marker, i+1);
+      if (end !== -1 && s[end-1] !== marker) {
         out += `<span class="md-italic">${esc(s.slice(i, end+1))}</span>`;
         i = end + 1; continue;
       }
@@ -1469,90 +1497,68 @@ function inlineHighlight(text) {
         i = end + 2; continue;
       }
     }
-    // Plain character
-    out += esc(s[i]);
+    // Plain character — wrap individually so it doesn't override child spans
+    out += `<span class="md-plain">${esc(s[i])}</span>`;
     i++;
   }
-  return `<span class="md-plain">${out}</span>`;
+  return out;
 }
 
 function highlightEditor() {
   if (!hlOn) return;
-  const lines = editor.value.split('\n');
-  let html = '';
-  let inCode = false;
-  let codeLang = '';
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const fence = line.match(/^(`{3,})([\w-]*)/);
+  const selStart = editor.selectionStart;
+  const selEnd   = editor.selectionEnd;
 
-    if (fence && !inCode) {
-      inCode = true;
-      codeLang = fence[2];
-      html += `<span class="md-codeblock">` + esc(fence[0].slice(0, fence[1].length))
-            + `<span class="md-codeblock-lang">${esc(codeLang)}</span>`
-            + esc(line.slice(fence[1].length + codeLang.length))
-            + `</span>`;
-    } else if (inCode && fence) {
-      inCode = false;
-      codeLang = '';
-      html += `<span class="md-codeblock">${esc(line)}</span>`;
-    } else if (inCode) {
-      html += `<span class="md-codeblock">${esc(line)}</span>`;
-    } else {
-      html += highlightLine(line);
-    }
-
-    if (i < lines.length - 1) html += '\n';
-  }
-
-  // Inject selection highlight into the plain text before markup
-  const ss = editor.selectionStart, se = editor.selectionEnd;
-  if (ss !== se) {
-    const raw = editor.value;
-    // Build new html with selection markers injected at char positions
-    // Easier: rebuild from raw text with selection markers, then highlight
-    const before = raw.slice(0, ss);
-    const sel    = raw.slice(ss, se);
-    const after  = raw.slice(se);
-
-    const hlBefore = buildHtml(before);
-    const hlSel    = buildHtml(sel);
-    const hlAfter  = buildHtml(after);
-
-    hlDiv.innerHTML = hlBefore
-      + `<span class="md-sel">${hlSel}</span>`
-      + hlAfter;
-  } else {
-    hlDiv.innerHTML = html;
-  }
+  hlDiv.innerHTML = buildHtml(editor.value, selStart, selEnd);
 
   hlDiv.scrollTop  = editor.scrollTop;
   hlDiv.scrollLeft = editor.scrollLeft;
 }
 
-function buildHtml(text) {
+function buildHtml(text, selStart, selEnd) {
   const lines = text.split('\n');
+  const hasSel = selStart !== undefined && selEnd !== undefined && selStart !== selEnd;
   let html = '';
   let inCode = false;
   let codeLang = '';
+  // Track absolute char offset (including newlines) to know when we're inside the selection
+  let offset = 0;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    const lineStart = offset;
+    const lineEnd   = offset + line.length;
     const fence = line.match(/^(`{3,})([\w-]*)/);
+    let lineHtml;
     if (fence && !inCode) {
       inCode = true; codeLang = fence[2];
-      html += `<span class="md-codeblock">` + esc(fence[0].slice(0, fence[1].length))
-            + `<span class="md-codeblock-lang">${esc(codeLang)}</span>`
-            + esc(line.slice(fence[1].length + codeLang.length)) + `</span>`;
+      lineHtml = `<span class="md-codeblock">` + esc(fence[0].slice(0, fence[1].length))
+               + `<span class="md-codeblock-lang">${esc(codeLang)}</span>`
+               + esc(line.slice(fence[1].length + codeLang.length)) + `</span>`;
     } else if (inCode && fence) {
       inCode = false; codeLang = '';
-      html += `<span class="md-codeblock">${esc(line)}</span>`;
+      lineHtml = `<span class="md-codeblock">${esc(line)}</span>`;
     } else if (inCode) {
-      html += `<span class="md-codeblock">${esc(line)}</span>`;
+      lineHtml = `<span class="md-codeblock">${esc(line)}</span>`;
     } else {
-      html += highlightLine(line);
+      lineHtml = highlightLine(line);
     }
+    // Wrap the selected portion of this line in a md-sel background span.
+    // We do this by splitting the plain text at the selection boundaries,
+    // then re-running the highlighter on each segment and wrapping the middle.
+    if (hasSel && selStart < lineEnd && selEnd > lineStart) {
+      const relStart = Math.max(0, selStart - lineStart);
+      const relEnd   = Math.min(line.length, selEnd - lineStart);
+      const before = line.slice(0, relStart);
+      const sel    = line.slice(relStart, relEnd);
+      const after  = line.slice(relEnd);
+      const hlBefore = before.length ? (inCode ? `<span class="md-codeblock">${esc(before)}</span>` : highlightLine(before)) : '';
+      const hlSel    = `<mark class="md-sel">${inCode ? `<span class="md-codeblock">${esc(sel)}</span>` : highlightLine(sel)}</mark>`;
+      const hlAfter  = after.length  ? (inCode ? `<span class="md-codeblock">${esc(after)}</span>`  : highlightLine(after))  : '';
+      lineHtml = hlBefore + hlSel + hlAfter;
+    }
+    html += lineHtml;
+    offset += line.length + 1; // +1 for the \n
     if (i < lines.length - 1) html += '\n';
   }
   return html;
@@ -1801,6 +1807,18 @@ function outdentLine() {
 }
 
 // ═══════════════════════════════════════════════════
+//  Selection preservation (toolbar buttons steal focus)
+// ═══════════════════════════════════════════════════
+// Prevent toolbar buttons from pulling focus away from the editor.
+// This keeps selectionStart/selectionEnd intact when any format
+// button (Bold, Link, H1, etc.) is clicked while the editor is active.
+document.getElementById('toolbar').addEventListener('mousedown', e => {
+  if (e.target.tagName === 'BUTTON' || e.target.closest('button')) {
+    e.preventDefault(); // keep focus (and selection) on editor
+  }
+});
+
+// ═══════════════════════════════════════════════════
 //  Format helpers
 // ═══════════════════════════════════════════════════
 function fmt(before, after) {
@@ -1826,7 +1844,11 @@ function fmtBlock() {
 
 function insertLink() {
   const s = editor.selectionStart, e2 = editor.selectionEnd;
-  spliceText(s, e2, '[' + (editor.value.slice(s, e2) || 'link text') + '](url)');
+  const linkText = editor.value.slice(s, e2) || 'link text';
+  spliceText(s, e2, '[' + linkText + '](url)');
+  // Select the 'url' placeholder so user can type the URL immediately
+  const urlStart = s + 1 + linkText.length + 2; // after '[linkText]('
+  editor.setSelectionRange(urlStart, urlStart + 3); // select 'url'
 }
 
 function insertText(text) {
@@ -1867,11 +1889,13 @@ function toggleHighlight() {
     hlDiv.style.visibility = '';
     editor.style.color = 'transparent';
     editor.style.caretColor = '';
+    editor.classList.add('hl-selection-off');
     highlightEditor();
   } else {
     hlDiv.style.visibility = 'hidden';
     editor.style.color = 'var(--text)';
     editor.style.caretColor = 'var(--text)';
+    editor.classList.remove('hl-selection-off');
   }
   saveConfig();
 }
@@ -1911,7 +1935,7 @@ async function mermaidToDataURL(code, id) {
   return new Promise(resolve => {
     const img = new Image();
     img.onload = () => {
-      const sc = 2.5, cv = document.createElement('canvas');
+      const sc = 2, cv = document.createElement('canvas');
       cv.width = w * sc; cv.height = h * sc;
       const ctx = cv.getContext('2d');
       ctx.fillStyle = '#fff'; ctx.fillRect(0,0,cv.width,cv.height);
@@ -2109,15 +2133,38 @@ async function exportPdf() {
       const src = imgEl.src || imgEl.getAttribute('src');
       if (!src) return;
       try {
+        // Fetch as blob to avoid canvas CORS taint on external images
+        let dataURL;
+        try {
+          const resp = await fetch(src);
+          const blob = await resp.blob();
+          dataURL = await new Promise((res, rej) => {
+            const r = new FileReader();
+            r.onload = () => res(r.result);
+            r.onerror = rej;
+            r.readAsDataURL(blob);
+          });
+        } catch(fetchErr) {
+          // Fallback: try direct load with crossOrigin
+          const loaded = await new Promise((res, rej) => {
+            const i = new Image(); i.crossOrigin = 'anonymous';
+            i.onload = () => res(i); i.onerror = rej; i.src = src;
+          });
+          const cv = document.createElement('canvas');
+          cv.width = loaded.naturalWidth; cv.height = loaded.naturalHeight;
+          cv.getContext('2d').drawImage(loaded, 0, 0);
+          dataURL = cv.toDataURL('image/jpeg', 0.85);
+        }
         const loaded = await new Promise((res, rej) => {
-          const i = new Image(); i.crossOrigin = 'anonymous';
-          i.onload = () => res(i); i.onerror = rej; i.src = src;
+          const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataURL;
         });
         const cv = document.createElement('canvas');
         cv.width = loaded.naturalWidth; cv.height = loaded.naturalHeight;
-        cv.getContext('2d').drawImage(loaded, 0, 0);
-        await renderDataURLImage(cv.toDataURL('image/png'), loaded.naturalWidth, loaded.naturalHeight);
-      } catch(e) {}
+        const ctx = cv.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+        ctx.drawImage(loaded, 0, 0);
+        await renderDataURLImage(cv.toDataURL('image/jpeg', 0.85), loaded.naturalWidth, loaded.naturalHeight);
+      } catch(e) { console.warn('PDF: could not render image', src, e); }
     }
 
     pdfProgress(true, 'Rendering content…');
@@ -2472,7 +2519,7 @@ npm install && npm run dev
 
 [Visit the Markdown Guide](https://www.markdownguide.org)
 
-![Placeholder image](https://placehold.co/600x200/1c2128/58a6ff?text=Image+placeholder)
+![A cat](https://cataas.com/cat?width=600&height=200)
 
 ---
 
@@ -2577,6 +2624,7 @@ function dismissWarning() {
       hlDiv.style.visibility = 'hidden';
       editor.style.color = 'var(--text)';
       editor.style.caretColor = 'var(--text)';
+      editor.classList.remove('hl-selection-off');
     }
 
     // sidebar
