@@ -529,7 +529,7 @@
     .cm-editor .cm-line::selection {
       background: #3a5fa0 !important;
     }
-    .cm-cursor { border-left-color: var(--text) !important; }
+    .cm-cursor { border-left-color: #93c5fd; border-left-width: 3px; } /* unfocused fallback — theme overrides when focused */
     .cm-placeholder { color: var(--text-dim); font-style: normal; }
     .cm-matchingBracket, .cm-nonmatchingBracket {
       background: var(--accent-dim);
@@ -1422,6 +1422,23 @@
     },
     '&.cm-focused .cm-selectionBackground': {
       background: '#3a5fa0 !important',
+    },
+    // Active line: bright enough to stand out against --surface (#161b22)
+    // without washing out syntax colours on that line.
+    '.cm-activeLine': {
+      backgroundColor: '#1e2a3a !important',
+      borderTop:       '1px solid #243040',
+      borderBottom:    '1px solid #243040',
+    },
+    '.cm-activeLineGutter': {
+      backgroundColor: '#1e2a3a !important',
+      color:           '#58a6ff !important',
+      fontWeight:      '600',
+    },
+    // Cursor: wide and light-blue so it stands out in dense dark text.
+    '&.cm-focused .cm-cursor, &.cm-focused .cm-dropCursor': {
+      borderLeftColor: '#93c5fd !important',
+      borderLeftWidth: '3px    !important',
     },
   });
 
