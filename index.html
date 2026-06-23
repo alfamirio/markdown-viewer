@@ -1068,6 +1068,7 @@
     <button class="btn" data-tip="Load .md file"         onclick="loadMd()">↑ .md</button>
     <input type="file" id="md-file-input" accept=".md,.markdown,.txt" style="display:none" onchange="onMdFileLoad(event)" />
     <button class="btn" id="btn-pdf" data-tip="Export PDF" onclick="exportPdf()">↓ .pdf</button>
+    <button class="btn" data-tip="Export standalone HTML" onclick="exportHtml()">↓ .html</button>
     <button class="btn" data-tip="Copy raw markdown"     onclick="copyRaw()">⎘ copy</button>
     <button class="btn" data-tip="Keyboard shortcuts  ?" onclick="openHkModal()" style="margin-left:4px">? keys</button>
 
@@ -1804,6 +1805,7 @@ function handleKeys(e) {
   if (mod && !shift && !alt && e.key === 's') { e.preventDefault(); saveContent(activeId, editor.value); markSaved(); return; }
   if (mod &&  shift && !alt && e.key === 'S') { e.preventDefault(); downloadMd(); return; }
   if (mod && !shift && !alt && e.key === 'p') { e.preventDefault(); exportPdf(); return; }
+  if (mod &&  shift && !alt && e.key === 'H') { e.preventDefault(); exportHtml(); return; }
   if (mod && !shift && !alt && e.key === 'e') { e.preventDefault(); editor.focus(); return; }
   if (!mod && !shift &&  alt && e.key === 'z') { e.preventDefault(); toggleWrap(); return; }
 
@@ -2244,6 +2246,159 @@ function downloadMd() {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = (noteTitleEl.value.trim() || 'note') + '.md';
+  a.click();
+}
+
+// ═══════════════════════════════════════════════════
+//  Export to standalone HTML
+// ═══════════════════════════════════════════════════
+function exportHtml() {
+  const title   = noteTitleEl.value.trim() || 'note';
+  const bodyHtml = preview.innerHTML;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${title.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --border:   #30363d;
+      --accent:   #58a6ff;
+      --text:     #e6edf3;
+      --muted:    #8b949e;
+      --dim:      #484f58;
+      --green:    #3fb950;
+      --orange:   #d29922;
+      --red:      #f85149;
+      --mono:     'JetBrains Mono', 'Fira Code', monospace;
+      --sans:     'Inter', system-ui, sans-serif;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 15px;
+      line-height: 1.75;
+      padding: 48px 24px 80px;
+    }
+    .page {
+      max-width: 780px;
+      margin: 0 auto;
+    }
+    h1,h2,h3,h4,h5,h6 {
+      font-family: var(--sans);
+      font-weight: 600;
+      line-height: 1.3;
+      margin: 1.6em 0 0.5em;
+      color: var(--text);
+    }
+    h1 { font-size: 2em;   border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+    h2 { font-size: 1.45em; border-bottom: 1px solid var(--border); padding-bottom: 0.25em; }
+    h3 { font-size: 1.2em; }
+    h4 { font-size: 1.05em; }
+    h5,h6 { font-size: 0.95em; color: var(--muted); }
+    p { margin: 0.75em 0; }
+    a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+    a:hover { color: #79b8ff; }
+    strong { font-weight: 600; color: var(--text); }
+    em { font-style: italic; color: #c9d1d9; }
+    del { color: var(--dim); text-decoration: line-through; }
+    ul, ol { margin: 0.6em 0 0.6em 1.6em; }
+    li { margin: 0.25em 0; }
+    li input[type="checkbox"] { margin-right: 6px; accent-color: var(--accent); }
+    blockquote {
+      border-left: 3px solid var(--accent);
+      margin: 1em 0;
+      padding: 0.5em 1em;
+      background: var(--surface);
+      border-radius: 0 4px 4px 0;
+      color: var(--muted);
+    }
+    blockquote p { margin: 0; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+    code {
+      font-family: var(--mono);
+      font-size: 0.88em;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.15em 0.4em;
+      color: #f0883e;
+    }
+    pre {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1.1em 1.3em;
+      overflow-x: auto;
+      margin: 1em 0;
+      line-height: 1.6;
+    }
+    pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      color: var(--text);
+      font-size: 0.85em;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1em 0;
+      font-size: 0.93em;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.5em 0.9em;
+      text-align: left;
+    }
+    th { background: var(--surface); font-weight: 600; color: var(--text); }
+    tr:nth-child(even) td { background: #0f1419; }
+    img { max-width: 100%; border-radius: 6px; margin: 0.5em 0; }
+    .mermaid-wrap { margin: 1em 0; overflow-x: auto; }
+    /* Export banner */
+    .export-banner {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--dim);
+      text-align: right;
+      margin-top: 3em;
+      padding-top: 1em;
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+${bodyHtml}
+<div class="export-banner">Exported from <strong style="color:var(--muted)">// md viewer</strong> · ${new Date().toLocaleDateString(undefined, { year:'numeric', month:'long', day:'numeric' })}</div>
+</div>
+<!-- Mermaid (re-renders any diagrams) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.0/mermaid.min.js"><\/script>
+<script>
+  mermaid.initialize({ startOnLoad:true, theme:'dark', darkMode:true,
+    themeVariables:{ background:'#161b22', primaryColor:'#1f4068',
+      primaryTextColor:'#e6edf3', primaryBorderColor:'#58a6ff',
+      lineColor:'#58a6ff', secondaryColor:'#1c2128', tertiaryColor:'#21262d' },
+    flowchart:{ curve:'basis' }, securityLevel:'loose' });
+<\/script>
+<!-- highlight.js for code blocks -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"><\/script>
+<script>hljs.highlightAll();<\/script>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = title + '.html';
   a.click();
 }
 
@@ -2698,7 +2853,7 @@ function closeHkModal() {
 //  CodeMirror module (loaded separately as type="module") is ready.
 // ═══════════════════════════════════════════════════
 Object.assign(window, {
-  closeHkModal, copyRaw, createNote, dismissWarning, downloadMd, exportPdf,
+  closeHkModal, copyRaw, createNote, dismissWarning, downloadMd, exportHtml, exportPdf,
   fmt, fmtBlock, fmtLine, insertLink, insertText, loadMd, openHkModal,
   resetAllData, setViewMode, tocJump, toggleHighlight, toggleSidebar,
   toggleToc, toggleWrap, renameCurrentNote, onMdFileLoad,
@@ -2746,6 +2901,7 @@ else window.addEventListener('cm-ready', boot, { once: true });
         <div class="hk-row"><span class="hk-desc">Save now</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>S</kbd></span></div>
         <div class="hk-row"><span class="hk-desc">Download .md</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>S</kbd></span></div>
         <div class="hk-row"><span class="hk-desc">Export PDF</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>P</kbd></span></div>
+        <div class="hk-row"><span class="hk-desc">Export HTML</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>H</kbd></span></div>
         <div class="hk-row"><span class="hk-desc">Toggle word wrap</span><span class="hk-keys"><kbd>Alt</kbd><span class="hk-plus">+</span><kbd>Z</kbd></span></div>
         <div class="hk-row"><span class="hk-desc">Focus editor</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>E</kbd></span></div>
       </div>
