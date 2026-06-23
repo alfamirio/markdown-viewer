@@ -37,11 +37,16 @@
     <div class="toolbar-row">
       <span class="toolbar-brand">// md viewer</span>
 
-      <button class="btn" data-tip="Load .md file"         onclick="loadMd()">↑ .md</button>
+      <button class="btn" data-tip="Load .md file"         onclick="loadMd()">↑ md</button>
+      <button class="btn" data-tip="Import notes from JSON"   onclick="importJson()">↑ json</button>
+      <div class="toolbar-sep"></div>
       <input type="file" id="md-file-input" accept=".md,.markdown,.txt" style="display:none" onchange="onMdFileLoad(event)" />
-      <button class="btn" data-tip="Download .md"          onclick="downloadMd()">↓ .md</button>
-      <button class="btn" id="btn-pdf" data-tip="Export PDF" onclick="exportPdf()">↓ .pdf</button>
-      <button class="btn" data-tip="Export standalone HTML" onclick="exportHtml()">↓ .html</button>
+      <button class="btn" data-tip="Download .md"          onclick="downloadMd()">↓ md</button>
+      <button class="btn" id="btn-pdf" data-tip="Export PDF" onclick="exportPdf()">↓ pdf</button>
+      <button class="btn" data-tip="Export standalone HTML" onclick="exportHtml()">↓ html</button>
+      <button class="btn" data-tip="Export all notes as JSON" onclick="exportJson()">↓ json</button>
+      <input type="file" id="json-file-input" accept=".json" style="display:none" onchange="onJsonFileLoad(event)" />
+      <div class="toolbar-sep"></div>
       <button class="btn" id="btn-copy" data-tip="Copy raw markdown"     onclick="copyRaw()">⎘ copy</button>
 
       <div class="toolbar-sep"></div>

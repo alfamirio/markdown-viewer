@@ -63,7 +63,7 @@ function loadContent(id) {
 function createNote(name, content) {
   const id = genId();
   name = name || 'Untitled ' + (notes.length + 1);
-  notes.push({ id, name });
+  notes.push({ id, name, createdAt: new Date().toISOString() });
   saveIndex();
   saveContent(id, content ?? DEFAULT_CONTENT(name));
   switchNote(id);
@@ -933,6 +933,66 @@ function downloadMd() {
 }
 
 // ═══════════════════════════════════════════════════
+//  Export / Import JSON
+// ═══════════════════════════════════════════════════
+function exportJson() {
+  if (activeId) saveContent(activeId, editor.value);
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    version: 1,
+    notes: notes.map(({ id, name, createdAt }) => ({
+      id,
+      name,
+      createdAt: createdAt ?? null,
+      content: loadContent(id),
+    })),
+  };
+  downloadBlob(
+    new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }),
+    'md-notes-export.json'
+  );
+}
+
+function importJson() {
+  document.getElementById('json-file-input').value = '';
+  document.getElementById('json-file-input').click();
+}
+
+function onJsonFileLoad(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    let payload;
+    try {
+      payload = JSON.parse(ev.target.result);
+    } catch(err) {
+      alert('Invalid JSON file — could not parse.');
+      return;
+    }
+    if (!Array.isArray(payload.notes) || payload.notes.length === 0) {
+      alert('No notes found in this JSON file.');
+      return;
+    }
+    const count = payload.notes.length;
+    if (!confirm(`Import ${count} note${count !== 1 ? 's' : ''}? They will be added to your existing notes.`)) return;
+    if (activeId) saveContent(activeId, editor.value);
+    let firstImportedId = null;
+    payload.notes.forEach(n => {
+      if (typeof n.name !== 'string' || typeof n.content !== 'string') return;
+      const id = genId();
+      notes.push({ id, name: n.name || 'Untitled', createdAt: n.createdAt ?? new Date().toISOString() });
+      saveContent(id, n.content);
+      if (!firstImportedId) firstImportedId = id;
+    });
+    saveIndex();
+    if (firstImportedId) switchNote(firstImportedId);
+    renderSidebar();
+  };
+  reader.readAsText(file);
+}
+
+// ═══════════════════════════════════════════════════
 //  Export to standalone HTML
 // ═══════════════════════════════════════════════════
 function exportHtml() {
@@ -1550,7 +1610,7 @@ function loadConfig() {
     legacyKeys.forEach(k => {
       const name = k.replace('md_editor_', '') || 'Untitled';
       const id   = genId();
-      notes.push({ id, name });
+      notes.push({ id, name, createdAt: new Date().toISOString() });
       localStorage.setItem(noteContent(id), localStorage.getItem(k) ?? '');
       localStorage.removeItem(k);
     });
@@ -1560,7 +1620,7 @@ function loadConfig() {
   // Ensure at least one note exists
   if (notes.length === 0) {
     const id = genId();
-    notes.push({ id, name: 'README' });
+    notes.push({ id, name: 'README', createdAt: new Date().toISOString() });
     saveIndex();
     saveContent(id, DEFAULT_CONTENT('README'));
   }
@@ -1649,8 +1709,8 @@ function closeHkModal() {
 //  CodeMirror module (loaded separately as type="module") is ready.
 // ═══════════════════════════════════════════════════
 Object.assign(window, {
-  closeHkModal, copyRaw, createNote, dismissWarning, downloadMd, exportHtml, exportPdf,
-  fmt, fmtBlock, fmtLine, insertLink, insertText, loadMd, openHkModal,
+  closeHkModal, copyRaw, createNote, dismissWarning, downloadMd, exportHtml, exportJson, exportPdf,
+  fmt, fmtBlock, fmtLine, importJson, insertLink, insertText, loadMd, onJsonFileLoad, openHkModal,
   resetAllData, setViewMode, tocJump, toggleHighlight, toggleSidebar,
   toggleToc, toggleWrap, toggleSyncScroll, onMdFileLoad,
 });
