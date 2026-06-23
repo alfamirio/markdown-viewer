@@ -4,6 +4,27 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Markdown Viewer</title>
+
+  <script>
+    try {
+      // Reemplaza 'md_config' por el valor real de tu CONFIG_KEY si es distinto
+      const cfg = JSON.parse(localStorage.getItem('md_config') || '{}');
+      
+        // Bloqueo del sidebar
+        if (cfg.sidebar === false) {
+          document.documentElement.classList.add('preload-sidebar-collapsed');
+        }
+        
+        // Bloqueo del modo de visualización (editor / preview)
+        if (cfg.viewMode === 'editor') {
+          document.documentElement.classList.add('preload-view-editor');
+        } else if (cfg.viewMode === 'preview') {
+          document.documentElement.classList.add('preload-view-preview');
+        }
+
+    } catch (e) {}
+  </script>
+
   <style>
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
 
@@ -163,6 +184,32 @@
       display: flex;
       flex: 1;
       overflow: hidden;
+    }
+
+     /* Sidebar oculto de inmediato */
+    .preload-sidebar-collapsed #sidebar {
+      width: 0 !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+      transition: none !important;
+    }
+
+    /* Modo Solo Editor: oculta panel derecho y divisor */
+    .preload-view-editor #right-pane,
+    .preload-view-editor #divider {
+      display: none !important;
+    }
+    .preload-view-editor #left-pane {
+      flex: 1 1 100% !important;
+    }
+
+    /* Modo Solo Preview: oculta panel izquierdo y divisor */
+    .preload-view-preview #left-pane,
+    .preload-view-preview #divider {
+      display: none !important;
+    }
+    .preload-view-preview #right-pane {
+      flex: 1 1 100% !important;
     }
 
     /* ── Notes sidebar ────────────────────────────────── */
@@ -1110,17 +1157,6 @@
     <div class="toolbar-row">
       <span class="toolbar-brand">// md viewer</span>
 
-      <button class="btn btn-icon active" id="btn-sidebar" data-tip="Toggle notes panel" onclick="toggleSidebar()">☰</button>
-      <button class="btn btn-icon active" id="btn-toc-toolbar" data-tip="Toggle table of contents" onclick="toggleToc()">§</button>
-
-      <div class="toolbar-sep"></div>
-
-      <button class="btn" id="btn-wrap" data-tip="Toggle word wrap" onclick="toggleWrap()">wrap</button>
-      <button class="btn active" id="btn-highlight" data-tip="Toggle syntax highlighting" onclick="toggleHighlight()">highlight</button>
-      <button class="btn active" id="btn-sync-scroll" data-tip="Link/unlink scroll between editor and preview" onclick="toggleSyncScroll()">⇅ sync</button>
-
-      <div class="toolbar-sep"></div>
-
       <button class="btn" data-tip="Load .md file"         onclick="loadMd()">↑ .md</button>
       <input type="file" id="md-file-input" accept=".md,.markdown,.txt" style="display:none" onchange="onMdFileLoad(event)" />
       <button class="btn" data-tip="Download .md"          onclick="downloadMd()">↓ .md</button>
@@ -1139,14 +1175,28 @@
 
       <div class="toolbar-sep"></div>
 
-      <button class="btn" data-tip="Keyboard shortcuts  ?" onclick="openHkModal()">? keys</button>
+      <button class="btn btn-icon active" id="btn-sidebar" data-tip="Toggle notes panel" onclick="toggleSidebar()">☰</button>
+      <button class="btn btn-icon active" id="btn-toc-toolbar" data-tip="Toggle table of contents" onclick="toggleToc()">§</button>
+
+      <div class="toolbar-sep"></div>
+
+      <button class="btn" id="btn-wrap" data-tip="Toggle word wrap" onclick="toggleWrap()">wrap</button>
+      <button class="btn active" id="btn-highlight" data-tip="Toggle syntax highlighting" onclick="toggleHighlight()">highlight</button>
+      <button class="btn active" id="btn-sync-scroll" data-tip="Link/unlink scroll between editor and preview" onclick="toggleSyncScroll()">⇅ sync</button>
+
+      <div class="toolbar-sep"></div>
+
 
       <div id="status">
+        <button class="btn" data-tip="Keyboard shortcuts ?" onclick="openHkModal()" style="padding: 0; margin-right: 2px;">? keys</button>
+        <span class="stat-sep">·</span>
+
         <span id="storage-count" class="stat">0% (0 KB)</span>
         <span class="stat-sep">·</span>
         <span id="word-count" class="stat">0 words</span>
         <span class="stat-sep">·</span>
         <span id="line-count" class="stat">0 lines</span>
+
         <span id="save-indicator" class="saved">● saved</span>
         <button id="btn-reset-all" data-tip="Delete all notes & reset app" onclick="resetAllData()">🗑</button>
       </div>
@@ -1154,6 +1204,20 @@
 
     <!-- Row 2: Markdown formatting -->
     <div class="toolbar-row">
+
+      <button class="btn" data-tip="Code block"     onclick="fmtBlock()">``` block</button>
+      <button class="btn" data-tip="Blockquote"     onclick="fmtLine('> ')">&gt; bq</button>
+      <button class="btn" data-tip="Horizontal rule" onclick="insertText('\n---\n')">— hr</button>
+      <button class="btn" data-tip="Link"            onclick="insertLink()">🔗 link</button>
+      <button class="btn" data-tip="Unordered list" onclick="fmtLine('- ')">— ul</button>
+      <button class="btn" data-tip="Ordered list"   onclick="fmtLine('1. ')">1. ol</button>
+
+      <div class="toolbar-sep"></div>
+
+      <button class="btn" id="btn-table" data-tip="Insert table">⊞ table</button>
+
+      <div class="toolbar-sep"></div>
+
       <button class="btn btn-icon" data-tip="Bold  Ctrl+B"        onclick="fmt('**','**')"><b>B</b></button>
       <button class="btn btn-icon" data-tip="Italic  Ctrl+I"      onclick="fmt('_','_')"><i>I</i></button>
       <button class="btn btn-icon" data-tip="Strikethrough"        onclick="fmt('~~','~~')" style="text-decoration:line-through">S</button>
@@ -1165,18 +1229,6 @@
       <button class="btn" data-tip="Heading 2" onclick="fmtLine('## ')">H2</button>
       <button class="btn" data-tip="Heading 3" onclick="fmtLine('### ')">H3</button>
 
-      <div class="toolbar-sep"></div>
-
-      <button class="btn" data-tip="Unordered list" onclick="fmtLine('- ')">— ul</button>
-      <button class="btn" data-tip="Ordered list"   onclick="fmtLine('1. ')">1. ol</button>
-      <button class="btn" data-tip="Blockquote"     onclick="fmtLine('> ')">&gt; bq</button>
-      <button class="btn" data-tip="Code block"     onclick="fmtBlock()">``` block</button>
-      <button class="btn" data-tip="Horizontal rule" onclick="insertText('\n---\n')">— hr</button>
-      <button class="btn" data-tip="Link"            onclick="insertLink()">🔗 link</button>
-
-      <div class="toolbar-sep"></div>
-
-      <button class="btn" id="btn-table" data-tip="Insert table">⊞ table</button>
     </div>
 
   </div>
@@ -1589,6 +1641,8 @@ function activeNoteName() {
   return (note && note.name.trim()) ? note.name.trim() : 'note';
 }
 const btnSidebar   = document.getElementById('btn-sidebar');
+
+let isInitializing = true;
 
 // ═══════════════════════════════════════════════════
 //  Notes state
@@ -2759,6 +2813,7 @@ function copyRaw() {
 let currentViewMode = 'both';
 
 function setViewMode(mode) {
+
   currentViewMode = mode;
 
   const lp = document.getElementById('left-pane');
@@ -2985,6 +3040,7 @@ function updateLocalStorageUsage() {
 //  Config persistence
 // ═══════════════════════════════════════════════════
 function saveConfig() {
+  if (isInitializing) return;
   const cfg = {
     wrap:             wrapOn,
     highlight:        highlightOn,
@@ -3084,6 +3140,9 @@ function dismissWarning() {
     // (warning footer: show unless user has explicitly dismissed it)
 
   } catch(e) {}
+
+  // Apagamos la bandera: a partir de ahora cualquier cambio del usuario sí se guardará
+  isInitializing = false;
 
   updateLocalStorageUsage();
 
