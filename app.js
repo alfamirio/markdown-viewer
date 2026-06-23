@@ -14,13 +14,13 @@ const lineEl       = document.getElementById('line-count');
 const btnWrap      = document.getElementById('btn-wrap');
 const btnHighlight = document.getElementById('btn-highlight');
 const notesList    = document.getElementById('notes-list');
-  document.getElementById('btn-new-note').addEventListener('click', () => createNote());
-const noteTitleEl  = { value: '', select() {} }; // title bar removed
+const btnSidebar   = document.getElementById('btn-sidebar');
+document.getElementById('btn-new-note').addEventListener('click', () => createNote());
+
 function activeNoteName() {
   const note = notes.find(n => n.id === activeId);
   return (note && note.name.trim()) ? note.name.trim() : 'note';
 }
-const btnSidebar   = document.getElementById('btn-sidebar');
 
 let isInitializing = true;
 
@@ -104,16 +104,6 @@ function deleteCurrentNote() {
   deleteNote(activeId);
 }
 
-function renameCurrentNote(name) {
-  const note = notes.find(n => n.id === activeId);
-  if (!note) return;
-  note.name = name || 'Untitled';
-  saveIndex();
-  // Update sidebar label without full re-render to avoid focus loss
-  const item = notesList.querySelector(`.note-item[data-id="${activeId}"] .note-name`);
-  if (item && item !== document.activeElement) item.value = note.name;
-}
-
 // ── Switch active note ─────────────────────────────
 function switchNote(id) {
   // Save current before switching
@@ -122,7 +112,6 @@ function switchNote(id) {
   activeId = id;
   const note = notes.find(n => n.id === id);
   editor.value = loadContent(id);
-  // noteTitleEl removed
   render();
   markSaved();
   renderSidebar();
@@ -145,6 +134,12 @@ function makeSidebarButton(className, title, text, tip, onClick) {
 }
 
 function renderSidebar() {
+  // Don't clobber a rename input the user is actively typing in —
+  // removing the element fires blur/commitRename on the old node,
+  // which could save stale text or jump focus unexpectedly.
+  const focused = document.activeElement;
+  if (focused && focused.classList.contains('note-name') && !focused.readOnly) return;
+
   notesList.innerHTML = '';
   if (notes.length === 0) {
     notesList.innerHTML = '<div id="notes-empty">No notes yet.<br>Press + to create one.</div>';
@@ -230,6 +225,14 @@ function toggleSidebar() {
   saveConfig();
 }
 
+function clearPreloadClasses() {
+    document.documentElement.classList.remove(
+      'preload-sidebar-collapsed', 
+      'preload-view-editor', 
+      'preload-view-preview'
+    );
+}
+
 function escapeHtml(str) {
   return String(str)
     .replace(/&/g, '&amp;')
@@ -241,26 +244,27 @@ function escapeHtml(str) {
 // ═══════════════════════════════════════════════════
 //  Mermaid init
 // ═══════════════════════════════════════════════════
-mermaid.initialize({
+const MERMAID_DARK_CONFIG = {
   startOnLoad: false,
   theme: 'dark',
   darkMode: true,
   themeVariables: {
-    background:      '#161b22',
-    primaryColor:    '#1f4068',
-    primaryTextColor:'#e6edf3',
+    background:       '#161b22',
+    primaryColor:     '#1f4068',
+    primaryTextColor: '#e6edf3',
     primaryBorderColor:'#58a6ff',
-    lineColor:       '#58a6ff',
-    secondaryColor:  '#1c2128',
-    tertiaryColor:   '#21262d',
+    lineColor:        '#58a6ff',
+    secondaryColor:   '#1c2128',
+    tertiaryColor:    '#21262d',
     edgeLabelBackground:'#161b22',
-    clusterBkg:      '#1c2128',
-    titleColor:      '#e6edf3',
-    nodeTextColor:   '#e6edf3',
+    clusterBkg:       '#1c2128',
+    titleColor:       '#e6edf3',
+    nodeTextColor:    '#e6edf3',
   },
   flowchart: { curve: 'basis' },
   securityLevel: 'loose',
-});
+};
+mermaid.initialize(MERMAID_DARK_CONFIG);
 
 // ═══════════════════════════════════════════════════
 //  marked config
@@ -326,14 +330,10 @@ function render() {
   updateToc();
 }
 
-
-
 // ═══════════════════════════════════════════════════
 //  Synchronized scrolling
 // ═══════════════════════════════════════════════════
-let suppressEditorScroll  = false;
-let suppressPreviewScroll = false;
-let syncScrollEnabled     = true;
+let syncScrollEnabled = true;
 
 function toggleSyncScroll() {
   syncScrollEnabled = !syncScrollEnabled;
@@ -342,33 +342,41 @@ function toggleSyncScroll() {
   saveConfig();
 }
 
+// Sync scroll between editor and preview in both directions.
+// The suppress flags prevent the listener on the other side from
+// re-firing and creating an infinite scroll loop.
+function syncScroll(source, target, suppressSource, suppressTarget) {
+  const pct = source.scrollTop / (source.scrollHeight - source.clientHeight || 1);
+  suppressTarget.value = true;
+  const max = Math.max(0, target.scrollHeight - target.clientHeight);
+  target.scrollTop = Math.max(0, Math.min(pct * max, max));
+  requestAnimationFrame(() => { suppressTarget.value = false; });
+}
+
+// Use objects so syncScroll can mutate the flags by reference.
+const supEditor  = { value: false };
+const supPreview = { value: false };
+
 editor.addEventListener('scroll', () => {
-  if (!syncScrollEnabled || suppressEditorScroll) return;
-  const pct = editor.scrollTop / (editor.scrollHeight - editor.clientHeight || 1);
-  suppressPreviewScroll = true;
-  const maxPreview = Math.max(0, preview.scrollHeight - preview.clientHeight);
-  preview.scrollTop = Math.max(0, Math.min(pct * maxPreview, maxPreview));
-  requestAnimationFrame(() => { suppressPreviewScroll = false; });
+  if (!syncScrollEnabled || supEditor.value) return;
+  syncScroll(editor, preview, supEditor, supPreview);
 });
 
 preview.addEventListener('scroll', () => {
-  if (!syncScrollEnabled || suppressPreviewScroll) return;
-  const pct = preview.scrollTop / (preview.scrollHeight - preview.clientHeight || 1);
-  suppressEditorScroll = true;
-  const maxEditor = Math.max(0, editor.scrollHeight - editor.clientHeight);
-  editor.scrollTop = Math.max(0, Math.min(pct * maxEditor, maxEditor));
-  requestAnimationFrame(() => { suppressEditorScroll = false; });
+  if (!syncScrollEnabled || supPreview.value) return;
+  syncScroll(preview, editor, supPreview, supEditor);
 });
 
 // ═══════════════════════════════════════════════════
 //  Status
 // ═══════════════════════════════════════════════════
 function updateStatus() {
-  const val   = editor.value;
-  const words = val.trim() ? val.trim().split(/\s+/).length : 0;
-  const lines = val ? val.split('\n').length : 0;
-  wordEl.textContent = words + (words === 1 ? ' word' : ' words');
-  lineEl.textContent = lines + (lines === 1 ? ' line' : ' lines');
+  const val     = editor.value;
+  const trimmed = val.trim();
+  const words   = trimmed ? trimmed.split(/\s+/).length : 0;
+  const lines   = val ? val.split('\n').length : 0;
+  wordEl.textContent = words + (words === 1 ? ' word'  : ' words');
+  lineEl.textContent = lines + (lines === 1 ? ' line'  : ' lines');
 }
 
 function markSaved()   { saveEl.className = 'saved';   saveEl.textContent = '● saved'; }
@@ -380,13 +388,15 @@ function markUnsaved() { saveEl.className = 'unsaved'; saveEl.textContent = '●
 function scheduleSave() {
   markUnsaved();
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => { saveContent(activeId, editor.value); markSaved(); }, 800);
+  saveTimer = setTimeout(() => { saveContent(activeId, editor.value); markSaved(); }, 1000);
 }
 
-editor.addEventListener('input', () => { render(); scheduleSave(); });
-
-// Title input
-// noteTitleEl listener removed (title bar removed)
+let renderTimer;
+editor.addEventListener('input', () => {
+  scheduleSave();
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(render, 150);
+});
 
 // ═══════════════════════════════════════════════════
 //  Keyboard shortcuts
@@ -428,11 +438,6 @@ function handleKeys(e) {
   if (mod && !shift && !alt && e.key === 'e') { e.preventDefault(); editor.focus(); return; }
   if (!mod && !shift &&  alt && e.key === 'z') { e.preventDefault(); toggleWrap(); return; }
 
-  // ── Notes ───────────────────────────────────────
-  if (mod && !shift &&  alt && e.key === 'n') { e.preventDefault(); createNote(); return; }
-  if (mod && !shift && !alt && e.key === '\\') { e.preventDefault(); toggleSidebar(); return; }
-  if (mod && !shift && !alt && e.key === ']') { e.preventDefault(); cycleNote(1); return; }
-  if (mod && !shift && !alt && e.key === '[') { e.preventDefault(); cycleNote(-1); return; }
 }
 
 // Global shortcuts (outside editor too)
@@ -476,29 +481,26 @@ function getLineRange(pos) {
   return {start, end: endIdx === -1 ? editor.value.length : endIdx};
 }
 
-// ── Indent current line ───────────────────────────
-// En lugar de procesar una sola línea, procesamos cada línea del rango seleccionado
-/**
- * Ajusta la indentación. Detecta si el archivo usa 2 o 4 espacios,
- * o tabuladores, y aplica/elimina esa misma medida.
- */
+// ── Indent / outdent selected lines (Tab / Shift+Tab) ─────────────────
+// Detects the document's indent style (tabs, 4-space, or 2-space) by
+// scanning all lines, so mixed-selection ranges get a consistent result.
+function detectIndentUnit(doc) {
+  for (let i = 1; i <= doc.lines; i++) {
+    const t = doc.line(i).text;
+    if (t.startsWith('\t'))   return '\t';
+    if (t.startsWith('    ')) return '    ';
+    if (t.startsWith('  '))   return '  ';
+  }
+  return '  '; // default: 2 spaces
+}
+
 function adjustIndent(isIndent) {
   const { from, to } = editor._view.state.selection.main;
   const doc = editor._view.state.doc;
   const startLine = doc.lineAt(from);
   const endLine = doc.lineAt(to);
-  
-  // Detección inteligente del estilo actual
-  const firstLineText = startLine.text;
-  let indentUnit = '  '; // Default 2 espacios
-  
-  if (firstLineText.startsWith('\t')) {
-    indentUnit = '\t';
-  } else if (firstLineText.startsWith('    ')) {
-    indentUnit = '    '; // Detecta 4 espacios
-  } else if (firstLineText.startsWith('  ')) {
-    indentUnit = '  ';   // Detecta 2 espacios
-  }
+
+  const indentUnit = detectIndentUnit(doc);
 
   let changes = [];
 
@@ -508,11 +510,10 @@ function adjustIndent(isIndent) {
     if (isIndent) {
       changes.push({ from: line.from, insert: indentUnit });
     } else {
-      // Outdent: quita el bloque completo si coincide con el estilo
       if (line.text.startsWith(indentUnit)) {
         changes.push({ from: line.from, to: line.from + indentUnit.length });
       } else if (line.text.startsWith(' ')) {
-        // Fallback: si hay espacios sueltos menores, quita solo 1
+        // Fallback: remove a single stray space
         changes.push({ from: line.from, to: line.from + 1 });
       }
     }
@@ -605,8 +606,6 @@ function toggleHighlight() {
   editor.setHighlight(highlightOn);
   saveConfig();
 }
-
-
 
 // ═══════════════════════════════════════════════════
 //  PDF / Download
@@ -907,16 +906,7 @@ async function exportPdf() {
     // switches it to 'neutral' for the PDF render — if we only did this on
     // success, a failed export would leave all live preview diagrams light-themed
     // until the page was reloaded).
-    mermaid.initialize({
-      startOnLoad: false, theme: 'dark', darkMode: true, securityLevel: 'loose',
-      flowchart: { curve: 'basis' },
-      themeVariables: {
-        background:'#161b22', primaryColor:'#1f4068', primaryTextColor:'#e6edf3',
-        primaryBorderColor:'#58a6ff', lineColor:'#58a6ff', secondaryColor:'#1c2128',
-        tertiaryColor:'#21262d', edgeLabelBackground:'#161b22',
-        clusterBkg:'#1c2128', titleColor:'#e6edf3', nodeTextColor:'#e6edf3',
-      },
-    });
+    mermaid.initialize(MERMAID_DARK_CONFIG);
 
     document.getElementById('pdf-render-root').innerHTML = '';
     pdfProgress(false);
@@ -1074,10 +1064,13 @@ ${bodyHtml}
 <!-- Mermaid (re-renders any diagrams) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.0/mermaid.min.js"><\/script>
 <script>
+  // Config kept in sync with MERMAID_DARK_CONFIG in app.js
   mermaid.initialize({ startOnLoad:true, theme:'dark', darkMode:true,
     themeVariables:{ background:'#161b22', primaryColor:'#1f4068',
       primaryTextColor:'#e6edf3', primaryBorderColor:'#58a6ff',
-      lineColor:'#58a6ff', secondaryColor:'#1c2128', tertiaryColor:'#21262d' },
+      lineColor:'#58a6ff', secondaryColor:'#1c2128', tertiaryColor:'#21262d',
+      edgeLabelBackground:'#161b22', clusterBkg:'#1c2128',
+      titleColor:'#e6edf3', nodeTextColor:'#e6edf3' },
     flowchart:{ curve:'basis' }, securityLevel:'loose' });
 <\/script>
 <!-- highlight.js for code blocks -->
@@ -1106,14 +1099,8 @@ function onMdFileLoad(e) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = ev => {
-    // Create a new note with the filename (strip extension)
     const name = file.name.replace(/\.(md|markdown|txt)$/i, '') || 'Imported';
-    const id = genId();
-    notes.push({ id, name });
-    saveIndex();
-    saveContent(id, ev.target.result);
-    renderSidebar();
-    switchNote(id);
+    createNote(name, ev.target.result);
   };
   reader.readAsText(file);
 }
@@ -1169,8 +1156,13 @@ function updateToc() {
 
 function tocJump(lineIndex) {
   const lines = editor.value.split('\n');
-  let charPos = 0;
-  for (let i = 0; i < lineIndex; i++) charPos += lines[i].length + 1;
+  // Single pass: compute char offset and heading index simultaneously
+  let charPos = 0, hIdx = 0, inCode = false;
+  for (let i = 0; i < lineIndex; i++) {
+    charPos += lines[i].length + 1;
+    if (/^`{3,}/.test(lines[i])) { inCode = !inCode; continue; }
+    if (!inCode && /^#{1,6}\s/.test(lines[i])) hIdx++;
+  }
 
   editor.focus();
   editor.setSelectionRange(charPos, charPos);
@@ -1180,12 +1172,6 @@ function tocJump(lineIndex) {
 
   // Also scroll preview to matching heading
   const headings = preview.querySelectorAll('h1,h2,h3,h4,h5,h6');
-  let hIdx = 0;
-  let inCode = false;
-  for (let i = 0; i < lineIndex; i++) {
-    if (/^`{3,}/.test(lines[i])) { inCode = !inCode; continue; }
-    if (!inCode && /^#{1,6}\s/.test(lines[i])) hIdx++;
-  }
   if (headings[hIdx]) headings[hIdx].scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   // Highlight active TOC item
@@ -1232,31 +1218,33 @@ function tocJump(lineIndex) {
   });
 })();
 
+const copyRaw = (() => {
+  const btn = document.getElementById('btn-copy');
+  let restoreTimer = null;
+  let prevText = '', prevStyle = '';
 
-let _copyRestoreTimer = null;
-function copyRaw() {
-  const copyBtn = document.getElementById('btn-copy');
-  navigator.clipboard.writeText(editor.value).then(() => {
-    // Snapshot button state once; if a copy is already in flight the
-    // timer has been cancelled but the prev* values still hold the
-    // original pre-copy state from the first call.
-    if (_copyRestoreTimer === null) {
-      copyRaw._prevText  = copyBtn.textContent;
-      copyRaw._prevStyle = copyBtn.getAttribute('style') || '';
-    }
-    clearTimeout(_copyRestoreTimer);
-    copyBtn.textContent = '✓ copied!';
-    copyBtn.style.color       = 'var(--green)';
-    copyBtn.style.borderColor = 'var(--green)';
-    copyBtn.style.background  = 'rgba(63,185,80,0.12)';
-    copyBtn.style.opacity     = '1';
-    _copyRestoreTimer = setTimeout(() => {
-      copyBtn.textContent = copyRaw._prevText;
-      copyBtn.setAttribute('style', copyRaw._prevStyle);
-      _copyRestoreTimer  = null;
-    }, 1500);
-  });
-}
+  return function copyRaw() {
+    navigator.clipboard.writeText(editor.value).then(() => {
+      // Snapshot the button's original state only on the first call
+      // in a burst — rapid re-copies keep the original as the restore target.
+      if (restoreTimer === null) {
+        prevText  = btn.textContent;
+        prevStyle = btn.getAttribute('style') || '';
+      }
+      clearTimeout(restoreTimer);
+      btn.textContent       = '✓ copied!';
+      btn.style.color       = 'var(--green)';
+      btn.style.borderColor = 'var(--green)';
+      btn.style.background  = 'rgba(63,185,80,0.12)';
+      btn.style.opacity     = '1';
+      restoreTimer = setTimeout(() => {
+        btn.textContent = prevText;
+        btn.setAttribute('style', prevStyle);
+        restoreTimer = null;
+      }, 1500);
+    });
+  };
+})()
 
 // ═══════════════════════════════════════════════════
 //  View mode (editor / both / preview)
@@ -1277,19 +1265,14 @@ function setViewMode(mode) {
   rp.style.width = '';
   rp.style.flex  = '';
 
-  if (mode === 'editor') {
-    lp.style.display = 'flex';
-    rp.style.display = 'none';
-    dv.style.display = 'none';
-  } else if (mode === 'preview') {
-    lp.style.display = 'none';
-    rp.style.display = 'flex';
-    dv.style.display = 'none';
-  } else { // both
-    lp.style.display = 'flex';
-    rp.style.display = 'flex';
-    dv.style.display = '';
-  }
+  const display = {
+    editor:  { lp: 'flex', rp: 'none', dv: 'none' },
+    preview: { lp: 'none', rp: 'flex', dv: 'none' },
+    both:    { lp: 'flex', rp: 'flex', dv: ''     },
+  }[mode] || { lp: 'flex', rp: 'flex', dv: '' };
+  lp.style.display = display.lp;
+  rp.style.display = display.rp;
+  dv.style.display = display.dv;
 
   // Update button active states
   ['editor','both','preview'].forEach(m => {
@@ -1298,36 +1281,73 @@ function setViewMode(mode) {
 
   saveConfig();
 }
-// ── Pane divider drag ─────────────────────────────
-(function() {
-  const divider  = document.getElementById('divider');
-  const leftPane = document.getElementById('left-pane');
-  const rightPane= document.getElementById('right-pane');
-  let dragging   = false;
+// ── Drag-resize helper ─────────────────────────────────────────────────
+// Wires up a splitter element to resize two adjacent panels on drag.
+// axis: 'x' for left/right panes, 'y' for top/bottom panels.
+// onMove(delta, startSizes) → called each mousemove with the drag delta
+//   and the panel sizes captured at mousedown.
+function makeDragResizer(splitter, axis, cursor, onMove) {
+  let dragging = false, startPos = 0, startSizes = [];
 
-  divider.addEventListener('mousedown', () => {
-    dragging = true;
-    divider.classList.add('dragging');
-    document.body.style.cursor = 'col-resize';
+  splitter.addEventListener('mousedown', e => {
+    dragging   = true;
+    startPos   = axis === 'x' ? e.clientX : e.clientY;
+    startSizes = onMove.captureStart();
+    splitter.classList.add('dragging');
+    document.body.style.cursor     = cursor;
     document.body.style.userSelect = 'none';
   });
+
   document.addEventListener('mousemove', e => {
     if (!dragging) return;
-    const rect  = document.getElementById('panes').getBoundingClientRect();
-    const pct   = Math.max(20, Math.min(80, (e.clientX - rect.left) / (rect.width - divider.offsetWidth) * 100));
-    leftPane.style.flex  = 'none';
-    leftPane.style.width = pct + '%';
-    rightPane.style.flex  = 'none';
-    rightPane.style.width = (100 - pct) + '%';
+    const delta = (axis === 'x' ? e.clientX : e.clientY) - startPos;
+    onMove(delta, startSizes, e);
   });
+
   document.addEventListener('mouseup', () => {
     if (!dragging) return;
     dragging = false;
-    divider.classList.remove('dragging');
-    document.body.style.cursor = '';
+    splitter.classList.remove('dragging');
+    document.body.style.cursor     = '';
     document.body.style.userSelect = '';
   });
-})();
+}
+
+// ── Pane divider drag (left/right) ─────────────────
+{
+  const divider   = document.getElementById('divider');
+  const leftPane  = document.getElementById('left-pane');
+  const rightPane = document.getElementById('right-pane');
+  const panesEl   = document.getElementById('panes');
+
+  function onPaneMove(delta, _, e) {
+    const rect = panesEl.getBoundingClientRect();
+    const pct  = Math.max(20, Math.min(80,
+      (e.clientX - rect.left) / (rect.width - divider.offsetWidth) * 100));
+    leftPane.style.flex   = 'none';
+    leftPane.style.width  = pct + '%';
+    rightPane.style.flex  = 'none';
+    rightPane.style.width = (100 - pct) + '%';
+  }
+  onPaneMove.captureStart = () => [];
+  makeDragResizer(divider, 'x', 'col-resize', onPaneMove);
+}
+
+// ── Sidebar TOC splitter drag (top/bottom) ──────────
+{
+  const splitter  = document.getElementById('sidebar-splitter');
+  const notesList = document.getElementById('notes-list');
+  const tocPanel  = document.getElementById('toc-panel');
+
+  function onSidebarMove(delta, [startNotesH, startTocH]) {
+    notesList.style.flex   = 'none';
+    notesList.style.height = Math.max(60, startNotesH + delta) + 'px';
+    tocPanel.style.flex    = 'none';
+    tocPanel.style.height  = Math.max(60, startTocH   - delta) + 'px';
+  }
+  onSidebarMove.captureStart = () => [notesList.offsetHeight, tocPanel.offsetHeight];
+  makeDragResizer(splitter, 'y', 'row-resize', onSidebarMove);
+};
 
 // ═══════════════════════════════════════════════════
 //  Default content
@@ -1431,7 +1451,7 @@ npm install && npm run dev
 \`\`\`mermaid
 flowchart LR
     A([Start]) --> B{Is it working?}
-    B -- Yes --> C[Ship it 🚀]
+    B -- Yes --> C[Ship it]
     B -- No  --> D[Debug]
     D --> E[Fix the bug]
     E --> B
@@ -1439,7 +1459,7 @@ flowchart LR
 
 ---
 
-*Happy writing!* ✨
+*Happy writing!* 
 `;
 }
 
@@ -1459,12 +1479,12 @@ function resetAllData() {
 }
 
 function updateLocalStorageUsage() {
-  let totalBytes = 0;
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    const value = localStorage.getItem(key);
-    totalBytes += (key.length + value.length) * 2;
-  }
+  const ownKeys = [NOTES_INDEX_KEY, CONFIG_KEY,
+    ...notes.map(n => noteContent(n.id))];
+  const totalBytes = ownKeys.reduce((acc, k) => {
+    const v = localStorage.getItem(k) ?? '';
+    return acc + (k.length + v.length) * 2;
+  }, 0);
 
   const maxBytes = 5242880; 
   // Separamos la versión string de la numérica
@@ -1547,8 +1567,8 @@ function loadConfig() {
 
   renderSidebar();
   // Restore the last-active note if it still exists; fall back to the first note.
+  const cfg = loadConfig();
   try {
-    const cfg = loadConfig();
     const savedId = cfg.activeId && notes.find(n => n.id === cfg.activeId) ? cfg.activeId : null;
     switchNote(savedId || notes[0].id);
   } catch(e) {
@@ -1557,7 +1577,6 @@ function loadConfig() {
 
   // Restore saved config
   try {
-    const cfg = loadConfig();
 
     // wrap
     wrapOn = cfg.wrap !== false;
@@ -1633,7 +1652,7 @@ Object.assign(window, {
   closeHkModal, copyRaw, createNote, dismissWarning, downloadMd, exportHtml, exportPdf,
   fmt, fmtBlock, fmtLine, insertLink, insertText, loadMd, openHkModal,
   resetAllData, setViewMode, tocJump, toggleHighlight, toggleSidebar,
-  toggleToc, toggleWrap, toggleSyncScroll, renameCurrentNote, onMdFileLoad,
+  toggleToc, toggleWrap, toggleSyncScroll, onMdFileLoad,
 });
 
 // ═══════════════════════════════════════════════════
@@ -1681,7 +1700,6 @@ Object.assign(window, {
     current = null;
   }
 })();
-
 
 // ═══════════════════════════════════════════════════
 //  Table picker
@@ -1759,6 +1777,8 @@ Object.assign(window, {
     insertText('\n' + lines.join('\n') + '\n');
   }
 })();
+
+clearPreloadClasses();
 
 } // ── end boot() ──
 

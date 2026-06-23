@@ -21,8 +21,8 @@
   const tok = name => css.getPropertyValue(name).trim();
   const mdHighlightStyle = HighlightStyle.define([
     // ── Headings — each level gets its own hue ────────────────────
-    { tag: tags.heading1,              color: '#ff7b72', fontWeight: '800', fontSize: '1.15em' },
-    { tag: tags.heading2,              color: '#ffa657', fontWeight: '700' },
+    { tag: tags.heading1,              color: '#ff7b72', fontWeight: '700', fontSize: '1.2em' },
+    { tag: tags.heading2,              color: '#ffa657', fontWeight: '700', fontSize: '1.1em' },
     { tag: tags.heading3,              color: '#f2cc60', fontWeight: '700' },
     { tag: tags.heading4,              color: '#7ee787', fontWeight: '600' },
     { tag: tags.heading5,              color: '#79c0ff', fontWeight: '600' },
