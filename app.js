@@ -132,6 +132,18 @@ function switchNote(id) {
 }
 
 // ── Sidebar DOM ────────────────────────────────────
+function makeSidebarButton(className, title, text, tip, onClick) {
+  const btn = document.createElement('button');
+
+  btn.className = className;
+  btn.title = title;
+  btn.textContent = text;
+  btn.dataset.tip = tip;
+  btn.addEventListener('click', onClick);
+
+  return btn;
+}
+
 function renderSidebar() {
   notesList.innerHTML = '';
   if (notes.length === 0) {
@@ -187,29 +199,26 @@ function renderSidebar() {
     nameEl.addEventListener('input', e => e.stopPropagation());
 
     // Rename button (pencil)
-    const renameBtn = document.createElement('button');
-    renameBtn.className = 'note-rename';
-    renameBtn.textContent = '✎';
-    renameBtn.dataset.tip = 'Rename note';
-    renameBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      if (note.id !== activeId) switchNote(note.id);
-      setTimeout(startRename, 0);
-    });
+    const renameBtn = makeSidebarButton(
+      'note-rename', 'Rename', '✎', 'Rename note',
+      e => {
+        e.stopPropagation();
+        if (note.id !== activeId) switchNote(note.id);
+        setTimeout(startRename, 0);
+      }
+    );
 
-    // Delete button
-    const delBtn = document.createElement('button');
-    delBtn.className = 'note-delete';
-    delBtn.textContent = '×';
-    delBtn.dataset.tip = 'Delete note';
-    delBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      deleteNote(note.id);
-    });
+    const deleteBtn = makeSidebarButton(
+      'note-delete', 'Delete','×', 'Delete note',
+      e => {
+        e.stopPropagation();
+        deleteNote(note.id);
+      }
+    );
 
     item.appendChild(nameEl);
     item.appendChild(renameBtn);
-    item.appendChild(delBtn);
+    item.appendChild(deleteBtn);
     notesList.appendChild(item);
   });
 }
@@ -219,6 +228,14 @@ function toggleSidebar() {
   document.getElementById('sidebar').classList.toggle('collapsed');
   btnSidebar.classList.toggle('active');
   saveConfig();
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 // ═══════════════════════════════════════════════════
@@ -267,8 +284,7 @@ marked.use({
       // We also stash the *raw* source in data-src so the PDF export path can read
       // it reliably — textContent would work today but would break if Mermaid ever
       // replaces the div contents with an SVG before exportPdf walks the container.
-      const safe = token.text
-        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const safe = escapeHtml(token.text);
       const rawAttr = token.text.replace(/"/g, '&quot;');
       return `<div class="mermaid-wrap"><div class="mermaid" id="${id}" data-src="${rawAttr}">${safe}</div></div>\n`;
     }
@@ -453,13 +469,19 @@ function cycleNote(dir) {
   switchNote(notes[next].id);
 }
 
+function getLineRange(pos) {
+  const start = editor.value.lastIndexOf('\n', pos - 1) + 1;
+  const endIdx = editor.value.indexOf('\n', pos);
+
+  return {start, end: endIdx === -1 ? editor.value.length : endIdx};
+}
+
 // ── Outdent current line ───────────────────────────
 function outdentLine() {
-  const s  = editor.selectionStart;
-  const ls = editor.value.lastIndexOf('\n', s - 1) + 1;
-  const le = editor.value.indexOf('\n', s);
-  const e2 = le === -1 ? editor.value.length : le;
+  const { start: ls, end: e2 } = getLineRange(editor.selectionStart);
+
   const line = editor.value.slice(ls, e2);
+
   if (line.startsWith('  ')) spliceText(ls, e2, line.slice(2));
   else if (line.startsWith('\t')) spliceText(ls, e2, line.slice(1));
 }
@@ -487,18 +509,14 @@ function fmt(before, after) {
 }
 
 function fmtLine(prefix) {
-  const s = editor.selectionStart;
-  const ls = editor.value.lastIndexOf('\n', s - 1) + 1;
-  const le = editor.value.indexOf('\n', s);
-  const e2 = le === -1 ? editor.value.length : le;
+  const { start: ls, end: e2 } = getLineRange(editor.selectionStart);
+
   const line = editor.value.slice(ls, e2);
-  // Exact-match toggle: only strip the prefix when the line begins with it
-  // *and* the character immediately after it is not another '#'.
-  // Without this guard, fmtLine('## ') on '### Foo' would match startsWith('## ')
-  // and strip two chars — turning '### Foo' into '# Foo' instead of prepending '## '.
-  const hashes = prefix.trimEnd(); // e.g. '##' from '## '
+
+  const hashes = prefix.trimEnd();
   const isExact = line.startsWith(prefix) &&
     !(hashes.split('').every(c => c === '#') && line[hashes.length] === '#');
+
   spliceText(ls, e2, isExact ? line.slice(prefix.length) : prefix + line);
 }
 
@@ -600,6 +618,14 @@ async function mermaidToDataURL(code, id) {
   });
 }
 
+function hexToRgb(hex) {
+  return [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+  ];
+}
+
 // ── Text-based PDF export — produces selectable text ─────────────────────
 async function exportPdf() {
   if (typeof window.jspdf === 'undefined') { printFallback(); return; }
@@ -627,12 +653,15 @@ async function exportPdf() {
     }
 
     function setFont(bold, italic, size, hexColor) {
-      const style = bold && italic ? 'bolditalic' : bold ? 'bold' : italic ? 'italic' : 'normal';
+      const style = bold && italic ? 'bolditalic'
+        : bold ? 'bold'
+        : italic ? 'italic'
+        : 'normal';
+
       pdf.setFont('helvetica', style);
       pdf.setFontSize(size);
-      if (hexColor) {
-        pdf.setTextColor(parseInt(hexColor.slice(1,3),16), parseInt(hexColor.slice(3,5),16), parseInt(hexColor.slice(5,7),16));
-      }
+
+      if (hexColor) pdf.setTextColor(...hexToRgb(hexColor));
     }
 
     function setFontMono(size) {
@@ -640,13 +669,14 @@ async function exportPdf() {
     }
 
     function fillRect(x, ry, w, h, hex) {
-      pdf.setFillColor(parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16));
+      pdf.setFillColor(...hexToRgb(hex));
       pdf.rect(x, ry, w, h, 'F');
     }
 
     function strokeLine(x1, ry, x2, hex) {
-      pdf.setDrawColor(parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16));
-      pdf.setLineWidth(0.5); pdf.line(x1, ry, x2, ry);
+      pdf.setDrawColor(...hexToRgb(hex));
+      pdf.setLineWidth(0.5);
+      pdf.line(x1, ry, x2, ry);
     }
 
     function plain(el) { return (el.textContent || '').replace(/\s+/g, ' ').trim(); }
@@ -856,13 +886,23 @@ async function exportPdf() {
     btn.classList.remove('printing');
   }
 }
-function downloadMd() {
-  const blob = new Blob([editor.value], { type: 'text/markdown' });
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = activeNoteName() + '.md';
+  a.href = url;
+  a.download = filename;
   a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 100);
+
+  URL.revokeObjectURL(url);
+}
+
+function downloadMd() {
+    downloadBlob(
+      new Blob([editor.value], { type: 'text/markdown' }),
+      activeNoteName() + '.md'
+    );
 }
 
 // ═══════════════════════════════════════════════════
@@ -877,7 +917,7 @@ function exportHtml() {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${title.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}</title>
+  <title>${escapeHtml(title)}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -993,7 +1033,6 @@ function exportHtml() {
 <body>
 <div class="page">
 ${bodyHtml}
-<div class="export-banner">Exported from <strong style="color:var(--muted)">// md viewer</strong> · ${new Date().toLocaleDateString(undefined, { year:'numeric', month:'long', day:'numeric' })}</div>
 </div>
 <!-- Mermaid (re-renders any diagrams) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.0/mermaid.min.js"><\/script>
@@ -1011,12 +1050,10 @@ ${bodyHtml}
 </body>
 </html>`;
 
-  const blob = new Blob([html], { type: 'text/html' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = title + '.html';
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 100);
+downloadBlob(
+  new Blob([html], { type: 'text/html' }),
+  activeNoteName() + '.html'
+);
 }
 
 // ═══════════════════════════════════════════════════
@@ -1085,13 +1122,10 @@ function updateToc() {
 
   // Escape heading text before interpolating into HTML to prevent XSS —
   // a heading like ## <img src=x onerror=alert(1)> would otherwise execute.
-  function esc(str) {
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
 
   tocList.innerHTML = headings.map(h => {
     const indent = `toc-h${h.level}`;
-    const safe   = esc(h.text);
+    const safe   = escapeHtml(h.text);
     return `<a class="toc-item ${indent}" data-line="${h.line}" onclick="tocJump(${h.line})" title="${safe}">${safe}</a>`;
   }).join('');
 }
@@ -1442,6 +1476,10 @@ function dismissWarning() {
 // ═══════════════════════════════════════════════════
 //  Init
 // ═══════════════════════════════════════════════════
+function loadConfig() {
+  return JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
+}
+
 (function init() {
   // Load notes index
   try {
@@ -1473,7 +1511,7 @@ function dismissWarning() {
   renderSidebar();
   // Restore the last-active note if it still exists; fall back to the first note.
   try {
-    const cfg = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
+    const cfg = loadConfig();
     const savedId = cfg.activeId && notes.find(n => n.id === cfg.activeId) ? cfg.activeId : null;
     switchNote(savedId || notes[0].id);
   } catch(e) {
@@ -1482,7 +1520,7 @@ function dismissWarning() {
 
   // Restore saved config
   try {
-    const cfg = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
+    const cfg = loadConfig();
 
     // wrap
     wrapOn = cfg.wrap !== false;
