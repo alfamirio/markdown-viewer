@@ -776,13 +776,10 @@
     }
 
     /* ── Tooltips ─────────────────────────────────────── */
-    [data-tip] { position: relative; }
-    [data-tip]:hover::after {
-      content: attr(data-tip);
-      position: absolute;
-      bottom: calc(100% + 6px);
-      left: 50%;
-      transform: translateX(-50%);
+    #tip-box {
+      position: fixed;
+      z-index: 9999;
+      pointer-events: none;
       white-space: nowrap;
       font-family: var(--mono);
       font-size: 10px;
@@ -791,8 +788,8 @@
       border: 1px solid var(--border);
       padding: 3px 7px;
       border-radius: 4px;
-      pointer-events: none;
-      z-index: 99;
+      display: none;
+      box-shadow: 0 2px 8px #00000055;
     }
 
     /* ── Word wrap ────────────────────────────────────── */
@@ -1064,9 +1061,9 @@
 
     <div class="toolbar-sep"></div>
 
-    <button class="btn" data-tip="Download .md"          onclick="downloadMd()">↓ .md</button>
     <button class="btn" data-tip="Load .md file"         onclick="loadMd()">↑ .md</button>
     <input type="file" id="md-file-input" accept=".md,.markdown,.txt" style="display:none" onchange="onMdFileLoad(event)" />
+    <button class="btn" data-tip="Download .md"          onclick="downloadMd()">↓ .md</button>
     <button class="btn" id="btn-pdf" data-tip="Export PDF" onclick="exportPdf()">↓ .pdf</button>
     <button class="btn" data-tip="Export standalone HTML" onclick="exportHtml()">↓ .html</button>
     <button class="btn" data-tip="Copy raw markdown"     onclick="copyRaw()">⎘ copy</button>
@@ -1086,7 +1083,7 @@
       <span class="stat-sep">·</span>
       <span id="line-count" class="stat">0 lines</span>
       <span id="save-indicator" class="saved">● saved</span>
-      <button id="btn-reset-all" data-tip="Delete all notes & reset app" onclick="resetAllData()" title="Delete all notes & reset app">🗑</button>
+      <button id="btn-reset-all" data-tip="Delete all notes & reset app" onclick="resetAllData()">🗑</button>
     </div>
   </div>
 
@@ -1142,17 +1139,20 @@
     </div><!-- /editor-area -->
   </div><!-- /body-row -->
   <!-- ── Warning footer ── -->
-  <div id="warning-footer">
+  <div id="warning-footer" style="display:none">
     <span class="warn-icon">⚠</span>
     <span class="warn-text">
       <strong>localStorage only</strong> — Notes are saved in your browser's localStorage and will be lost if you clear site data.
       <strong>Export regularly</strong> using ↓&nbsp;.md.
       This tool is provided <strong>as-is, with no warranty</strong> of any kind — not for production use.
     </span>
-    <button id="btn-warn-dismiss" onclick="dismissWarning()" title="Dismiss">×</button>
+    <button id="btn-warn-dismiss" onclick="dismissWarning()" data-tip="Dismiss warning">×</button>
   </div>
 
 </div><!-- /app -->
+
+<!-- Floating tooltip -->
+<div id="tip-box"></div>
 
 <!-- Hidden render target for PDF rasterization -->
 <div id="pdf-render-root"></div>
@@ -1585,6 +1585,7 @@ function renderSidebar() {
     nameEl.value = note.name;
     nameEl.spellcheck = false;
     nameEl.title = 'Click to open · Double-click to rename';
+    nameEl.dataset.tip = 'Click to open · Double-click to rename';
 
     // Single click → switch note
     nameEl.addEventListener('mousedown', e => {
@@ -1613,6 +1614,7 @@ function renderSidebar() {
     delBtn.className = 'note-delete';
     delBtn.textContent = '×';
     delBtn.title = 'Delete note';
+    delBtn.dataset.tip = 'Delete note';
     delBtn.addEventListener('click', e => {
       e.stopPropagation();
       if (notes.length === 1 || confirm(`Delete "${note.name}"?`)) deleteNote(note.id);
@@ -2739,6 +2741,7 @@ function resetAllData() {
   Object.keys(localStorage)
     .filter(k => k.startsWith('md_note_') || k.startsWith('md_editor_'))
     .forEach(k => localStorage.removeItem(k));
+  localStorage.removeItem('md_warning_dismissed');
   location.reload();
 }
 
@@ -2752,13 +2755,13 @@ function saveConfig() {
     sidebar:          !document.getElementById('sidebar').classList.contains('collapsed'),
     toc:              tocVisible,
     viewMode:         currentViewMode,
-    warnDismissed:    document.getElementById('warning-footer').style.display === 'none',
   };
   localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
 }
 
 function dismissWarning() {
   document.getElementById('warning-footer').style.display = 'none';
+  localStorage.setItem('md_warning_dismissed', '1');
   saveConfig();
 }
 
@@ -2827,12 +2830,19 @@ function dismissWarning() {
     if (cfg.viewMode && cfg.viewMode !== 'both') {
       setViewMode(cfg.viewMode);
     }
-    // warning banner
-    if (cfg.warnDismissed) {
-      document.getElementById('warning-footer').style.display = 'none';
-    }
+    // (warning footer: show unless user has explicitly dismissed it)
 
   } catch(e) {}
+
+  // Show warning footer unless user has previously dismissed it
+  if (!localStorage.getItem('md_warning_dismissed')) {
+    document.getElementById('warning-footer').style.display = 'flex';
+  }
+
+  // After a reset, clear the temporary flag (footer visibility already handled above)
+  if (localStorage.getItem('md_show_warning')) {
+    localStorage.removeItem('md_show_warning');
+  }
 })();
 
 // ═══════════════════════════════════════════════════
@@ -2859,6 +2869,52 @@ Object.assign(window, {
   toggleToc, toggleWrap, renameCurrentNote, onMdFileLoad,
 });
 
+// ═══════════════════════════════════════════════════
+//  Tooltip
+// ═══════════════════════════════════════════════════
+(function () {
+  const box = document.getElementById('tip-box');
+  let current = null;
+
+  document.addEventListener('mouseover', e => {
+    const el = e.target.closest('[data-tip]');
+    if (!el || !el.dataset.tip) { hide(); return; }
+    if (el === current) return;
+    current = el;
+    box.textContent = el.dataset.tip;
+    box.style.display = 'block';
+    position(e);
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!current) return;
+    position(e);
+  });
+
+  document.addEventListener('mouseout', e => {
+    const el = e.target.closest('[data-tip]');
+    if (el && el === current) hide();
+  });
+
+  function position(e) {
+    const pad = 12;
+    const bw = box.offsetWidth, bh = box.offsetHeight;
+    let x = e.clientX - bw / 2;
+    let y = e.clientY - bh - pad;
+    // Flip below cursor if too close to top
+    if (y < 4) y = e.clientY + pad;
+    // Keep within horizontal viewport
+    x = Math.max(4, Math.min(x, window.innerWidth - bw - 4));
+    box.style.left = x + 'px';
+    box.style.top  = y + 'px';
+  }
+
+  function hide() {
+    box.style.display = 'none';
+    current = null;
+  }
+})();
+
 } // ── end boot() ──
 
 // Start the app once the CodeMirror module has finished setting up
@@ -2873,7 +2929,7 @@ else window.addEventListener('cm-ready', boot, { once: true });
   <div id="hk-modal" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
     <div id="hk-header">
       <h2>⌨ Keyboard <span>shortcuts</span></h2>
-      <button id="hk-close" onclick="closeHkModal()" title="Close (Esc)">×</button>
+      <button id="hk-close" onclick="closeHkModal()" data-tip="Close  Esc">×</button>
     </div>
     <div id="hk-body">
 
