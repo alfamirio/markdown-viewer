@@ -416,7 +416,7 @@ function handleKeys(e) {
   // ── Tab / Shift+Tab ─────────────────────────────
   if (!mod && !alt && e.key === 'Tab') {
     e.preventDefault();
-    if (shift) { outdentLine(); } else { insertText('  '); }
+    if (shift) { adjustIndent(false); } else { adjustIndent(true); }
     return;
   }
 
@@ -476,14 +476,51 @@ function getLineRange(pos) {
   return {start, end: endIdx === -1 ? editor.value.length : endIdx};
 }
 
-// ── Outdent current line ───────────────────────────
-function outdentLine() {
-  const { start: ls, end: e2 } = getLineRange(editor.selectionStart);
+// ── Indent current line ───────────────────────────
+// En lugar de procesar una sola línea, procesamos cada línea del rango seleccionado
+/**
+ * Ajusta la indentación. Detecta si el archivo usa 2 o 4 espacios,
+ * o tabuladores, y aplica/elimina esa misma medida.
+ */
+function adjustIndent(isIndent) {
+  const { from, to } = editor._view.state.selection.main;
+  const doc = editor._view.state.doc;
+  const startLine = doc.lineAt(from);
+  const endLine = doc.lineAt(to);
+  
+  // Detección inteligente del estilo actual
+  const firstLineText = startLine.text;
+  let indentUnit = '  '; // Default 2 espacios
+  
+  if (firstLineText.startsWith('\t')) {
+    indentUnit = '\t';
+  } else if (firstLineText.startsWith('    ')) {
+    indentUnit = '    '; // Detecta 4 espacios
+  } else if (firstLineText.startsWith('  ')) {
+    indentUnit = '  ';   // Detecta 2 espacios
+  }
 
-  const line = editor.value.slice(ls, e2);
+  let changes = [];
 
-  if (line.startsWith('  ')) spliceText(ls, e2, line.slice(2));
-  else if (line.startsWith('\t')) spliceText(ls, e2, line.slice(1));
+  for (let i = startLine.number; i <= endLine.number; i++) {
+    const line = doc.line(i);
+    
+    if (isIndent) {
+      changes.push({ from: line.from, insert: indentUnit });
+    } else {
+      // Outdent: quita el bloque completo si coincide con el estilo
+      if (line.text.startsWith(indentUnit)) {
+        changes.push({ from: line.from, to: line.from + indentUnit.length });
+      } else if (line.text.startsWith(' ')) {
+        // Fallback: si hay espacios sueltos menores, quita solo 1
+        changes.push({ from: line.from, to: line.from + 1 });
+      }
+    }
+  }
+
+  if (changes.length > 0) {
+    editor._view.dispatch({ changes: changes });
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -1426,23 +1463,23 @@ function updateLocalStorageUsage() {
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     const value = localStorage.getItem(key);
-    // En UTF-16 cada carácter ocupa 2 bytes
     totalBytes += (key.length + value.length) * 2;
   }
 
-  // Límite estimado de 5MB en bytes (5 * 1024 * 1024)
   const maxBytes = 5242880; 
-  const percentage = ((totalBytes / maxBytes) * 100).toFixed(1);
+  // Separamos la versión string de la numérica
+  const percentageStr = ((totalBytes / maxBytes) * 100).toFixed(1);
+  const percentageNum = parseFloat(percentageStr);
   const sizeInKB = (totalBytes / 1024).toFixed(1);
 
   const storageElem = document.getElementById('storage-count');
   if (storageElem) {
-    storageElem.textContent = `${percentage}% (${sizeInKB} KB)`;
+    storageElem.textContent = `${percentageStr}% (${sizeInKB} KB)`;
     
-    // Cambiar color de advertencia según el uso
-    if (percentage > 90) {
+    // Ahora evaluamos el número real
+    if (percentageNum > 90) {
       storageElem.style.color = 'var(--red)';
-    } else if (percentage > 70) {
+    } else if (percentageNum > 70) {
       storageElem.style.color = 'var(--orange)';
     } else {
       storageElem.style.color = 'var(--text-muted)';
