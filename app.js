@@ -930,6 +930,147 @@ async function exportPdf() {
       y += (afterGap || 0);
     }
 
+    // ── Inline-aware paragraph renderer ────────────────────────────────────
+    // Walks the child nodes of a block element, collecting styled "runs"
+    // (spans of text each with their own bold/italic/strike/mono flags),
+    // then word-wraps and renders them line by line — drawing a strikethrough
+    // rule over any runs that need it (jsPDF has no text-decoration support).
+    function collectRuns(node, runs, ctx) {
+      // ctx = { bold, italic, strike, mono, color }
+      if (node.nodeType === Node.TEXT_NODE) {
+        const t = node.textContent.replace(/\s+/g, ' ');
+        if (t) runs.push({ text: t, ...ctx });
+        return;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+      const tag = node.tagName.toLowerCase();
+      // Skip block-level elements that renderBlock handles separately
+      if (tag === 'ul' || tag === 'ol' || tag === 'blockquote' || tag === 'pre') return;
+      let c = { ...ctx };
+      if (tag === 'strong' || tag === 'b')      c.bold   = true;
+      if (tag === 'em'     || tag === 'i')      c.italic = true;
+      if (tag === 's' || tag === 'del' || tag === 'strike') c.strike = true;
+      if (tag === 'code')                        c.mono   = true;
+      if (tag === 'a') { c.color = '#1a56db'; c.href = node.getAttribute('href') || null; }
+      for (const child of node.childNodes) collectRuns(child, runs, c);
+    }
+
+    // Returns the advance width of `text` given the current jsPDF font (in pt).
+    function textWidth(text) {
+      return pdf.getStringUnitWidth(text) * pdf.getFontSize() / pdf.internal.scaleFactor;
+    }
+
+    // Sets jsPDF font for a run's style flags.
+    function applyRunFont(run, size, defaultHex) {
+      if (run.mono) {
+        pdf.setFont('courier', run.bold ? 'bold' : 'normal');
+        pdf.setFontSize(size * 0.88);
+        pdf.setTextColor(...hexToRgb('#374151'));
+      } else {
+        setFont(run.bold, run.italic, size, run.color || defaultHex);
+      }
+    }
+
+    // Wrap inline runs into lines.
+    // Strategy: concatenate all run text into a single string, use
+    // pdf.splitTextToSize (which we know works) to get the line breaks,
+    // then re-map styled runs back onto those lines character by character.
+    // This avoids the textWidth() unit issues in the layout pass.
+    function wrapRuns(runs, maxW, size, defaultHex) {
+      if (!runs.length) return [];
+
+      // Build a plain-text version for layout purposes.
+      // Use the default (non-mono) font for splitTextToSize — mono runs are
+      // slightly narrower so this is a conservative (safe) estimate.
+      setFont(false, false, size, defaultHex);
+      const fullText = runs.map(r => r.text).join('');
+      const wrappedLines = pdf.splitTextToSize(fullText, maxW);
+
+      // Re-map runs back onto each wrapped line by consuming characters.
+      // We walk through runs and their characters, advancing a cursor, and
+      // slice each wrapped line's text out of the run stream.
+      const result = [];
+      let runIdx = 0;
+      let charIdx = 0; // position within runs[runIdx].text
+
+      for (const lineText of wrappedLines) {
+        const lineSegs = [];
+        let remaining = lineText.length;
+
+        while (remaining > 0 && runIdx < runs.length) {
+          const run = runs[runIdx];
+          const available = run.text.length - charIdx;
+          const take = Math.min(available, remaining);
+          const seg = run.text.slice(charIdx, charIdx + take);
+          if (seg) lineSegs.push({ ...run, text: seg });
+          charIdx += take;
+          remaining -= take;
+          if (charIdx >= run.text.length) { runIdx++; charIdx = 0; }
+        }
+
+        // After consuming the line's visible chars, skip the space that
+        // splitTextToSize consumed as a line break (if any).
+        if (runIdx < runs.length) {
+          const run = runs[runIdx];
+          if (charIdx < run.text.length && run.text[charIdx] === ' ') {
+            charIdx++;
+            if (charIdx >= run.text.length) { runIdx++; charIdx = 0; }
+          }
+        }
+
+        result.push(lineSegs);
+      }
+
+      return result;
+    }
+
+    // Render an element's inline content with full bold/italic/strike support.
+    // `x` = left edge, `maxW` = available width, `size` = base font size,
+    // `defaultHex` = default text colour, `afterGap` = gap below last line.
+    function writeInline(el, x, maxW, size, defaultHex, afterGap) {
+      const runs = [];
+      const baseCtx = { bold: false, italic: false, strike: false, mono: false, color: null };
+      for (const child of el.childNodes) collectRuns(child, runs, baseCtx);
+      if (!runs.length) { y += (afterGap || 0); return; }
+
+      const lh = size * 1.45;
+      const lines = wrapRuns(runs, maxW, size, defaultHex);
+
+      for (const lineSegs of lines) {
+        newPageIfNeeded(lh);
+
+        // Render each segment, tracking x position so we can draw strike lines
+        let cx = x;
+        const strikeSegs = []; // collect segments that need a strike rule
+
+        for (const seg of lineSegs) {
+          applyRunFont(seg, size, defaultHex);
+          const sw = textWidth(seg.text);
+          pdf.text(seg.text, cx, y);
+          // Add a clickable link annotation when this run is a hyperlink.
+          // jsPDF link() args: x, y (top-left corner), w, h, {url}.
+          // We use size * 1.1 as a conservative line-height for the hit box.
+          if (seg.href) {
+            const linkH = size * 1.1;
+            pdf.link(cx, y - linkH, sw, linkH, { url: seg.href });
+          }
+          if (seg.strike) strikeSegs.push({ x1: cx, x2: cx + sw });
+          cx += sw;
+        }
+
+        // Draw strikethrough lines (painter's model: on top of text)
+        if (strikeSegs.length) {
+          const strikeY = y - size * 0.33; // roughly mid-cap-height
+          pdf.setLineWidth(0.6);
+          pdf.setDrawColor(...hexToRgb('#1a1a1a'));
+          for (const { x1, x2 } of strikeSegs) pdf.line(x1, strikeY, x2, strikeY);
+        }
+
+        y += lh;
+      }
+      y += (afterGap || 0);
+    }
+
     async function renderDataURLImage(dataURL, imgW, imgH) {
       const maxW = CW, maxH = PH - MT - MB - 20;
       if (imgW > maxW) { imgH = imgH * maxW / imgW; imgW = maxW; }
@@ -948,8 +1089,7 @@ async function exportPdf() {
         y += level <= 2 ? 14 : 8;
         newPageIfNeeded(sz * 1.8);
         writeWrapped(plain(el), ML, CW, true, false, sz, '#111111', 0);
-        if (level <= 2) { strokeLine(ML, y + 1, ML + CW, '#d1d5db'); y += 8; }
-        else y += 4;
+        y += level <= 2 ? 10 : 4;
         return;
       }
 
@@ -958,57 +1098,190 @@ async function exportPdf() {
         if (imgs.length && !el.textContent.trim()) {
           for (const img of imgs) await renderImgEl(img); return;
         }
-        writeWrapped(plain(el), ML, CW, false, false, 11, '#1a1a1a', 6);
+        writeInline(el, ML, CW, 11, '#1a1a1a', 6);
         return;
       }
 
       if (tag === 'hr') {
-        y += 8; newPageIfNeeded(4);
-        strokeLine(ML, y, ML + CW, '#d1d5db'); y += 12;
+        // Add a fixed gap above and below the rule regardless of what
+        // the previous block left in y — predictable spacing is better
+        // than trying to compensate for variable trailing gaps.
+        y += 6;
+        newPageIfNeeded(16);
+        strokeLine(ML, y, ML + CW, '#d1d5db');
+        y += 16;
         return;
       }
 
       if (tag === 'blockquote') {
-        setFont(false, false, 10.5, '#374151');
-        const lines = pdf.splitTextToSize(plain(el), CW - 16);
-        const lh = 10.5 * 1.45, bh = lines.length * lh + 12;
-        newPageIfNeeded(bh);
-        fillRect(ML, y, 3, bh, '#9ca3af');
-        fillRect(ML + 3, y, CW - 3, bh, '#f9fafb');
-        y += 7;
-        for (const line of lines) { pdf.text(line, ML + 12, y); y += lh; }
-        y += 10; return;
+        const BQ_SIZE = 10.5;
+        const lh = BQ_SIZE * 1.45;
+        // vPad: total vertical padding split evenly top/bottom (inside the rect).
+        // Keep it tight — half-pad top, then baseline, then half-pad bottom after last line.
+        const vPad = 10;
+        const bqX = ML + 12;
+        const bqW = CW - 16;
+
+        // Collect inline runs (italic by default, like a real blockquote).
+        // marked wraps blockquote content in <p> tags — collect from those
+        // <p> elements' children directly to avoid double-visiting text nodes.
+        const runs = [];
+        const baseCtx = { bold: false, italic: true, strike: false, mono: false, color: null };
+        const bqParagraphs = el.querySelectorAll('p');
+        const bqSources = bqParagraphs.length ? bqParagraphs : [el];
+        for (const pEl of bqSources) {
+          for (const child of pEl.childNodes) collectRuns(child, runs, baseCtx);
+          if (runs.length && runs[runs.length - 1].text.slice(-1) !== ' ') {
+            runs.push({ text: ' ', ...baseCtx });
+          }
+        }
+        if (!runs.length) return;
+
+        const bqLines = wrapRuns(runs, bqW, BQ_SIZE, '#374151');
+        if (!bqLines.length) return;
+
+        // ascent offset: distance from rect-top-padding to text baseline.
+        // Using fontSize * 0.75 matches jsPDF's default ascender for helvetica.
+        const ascOffset = BQ_SIZE * 0.75;
+        // descent: space to reserve below the last baseline before rect bottom.
+        const descent  = BQ_SIZE * 0.25;
+
+        newPageIfNeeded(ascOffset + descent + vPad + (bqLines.length - 1) * lh);
+
+        // Two-pass: accumulate {segs, ty, strikeSegs} rows, then draw rect → text.
+        let segTop = y;
+        let segRows = [];
+
+        function flushQuoteSegment(segBottom) {
+          const sh = segBottom - segTop;
+          if (sh <= 0) return;
+          fillRect(ML,     segTop, 3,      sh, '#9ca3af');
+          fillRect(ML + 3, segTop, CW - 3, sh, '#f9fafb');
+          for (const { segs, ty: rowY, strikeSegs: ss } of segRows) {
+            let cx = bqX;
+            for (const seg of segs) {
+              applyRunFont(seg, BQ_SIZE, '#374151');
+              const sw = textWidth(seg.text);
+              pdf.text(seg.text, cx, rowY);
+              if (seg.href) {
+                const linkH = BQ_SIZE * 1.1;
+                pdf.link(cx, rowY - linkH, sw, linkH, { url: seg.href });
+              }
+              cx += sw;
+            }
+            if (ss.length) {
+              const sy = rowY - BQ_SIZE * 0.33;
+              pdf.setLineWidth(0.6);
+              pdf.setDrawColor(...hexToRgb('#374151'));
+              for (const { x1, x2 } of ss) pdf.line(x1, sy, x2, sy);
+            }
+          }
+          segRows = [];
+        }
+
+        // First text baseline: rect-top + half-vPad + ascender offset
+        y = segTop + vPad / 2 + ascOffset;
+        let lastBaseline = y;
+
+        for (let i = 0; i < bqLines.length; i++) {
+          // For page-break check use ascOffset+descent for the current line,
+          // plus remaining lines + final descent+padding.
+          const remaining = bqLines.length - 1 - i;
+          const needed = descent + vPad / 2 + remaining * lh;
+          if (y + needed > PH - MB) {
+            flushQuoteSegment(PH - MB);
+            pdf.addPage();
+            segTop = MT;
+            y = MT + vPad / 2 + ascOffset;
+          }
+          const segs = bqLines[i];
+          const ss = [];
+          let cx = bqX;
+          for (const seg of segs) {
+            applyRunFont(seg, BQ_SIZE, '#374151');
+            if (seg.strike) ss.push({ x1: cx, x2: cx + textWidth(seg.text) });
+            cx += textWidth(seg.text);
+          }
+          segRows.push({ segs, ty: y, strikeSegs: ss });
+          lastBaseline = y;
+          if (i < bqLines.length - 1) y += lh;
+        }
+
+        // rect bottom = last baseline + descent + half-vPad
+        const finalBottom = lastBaseline + descent + vPad / 2;
+        flushQuoteSegment(finalBottom);
+        y = finalBottom + 4; // small gap after blockquote
+        return;
       }
 
       if (tag === 'pre') {
+        const PRE_SIZE = 9;
         const text = el.textContent || '';
-        setFontMono(9);
+        setFontMono(PRE_SIZE);
         const lines = pdf.splitTextToSize(text, CW - 18);
-        const lh = 9 * 1.5, bh = lines.length * lh + 16;
-        newPageIfNeeded(Math.min(bh, 80)); // require at least 80pt before starting
-        const startY = y;
-        fillRect(ML, y, CW, bh, '#f3f4f6');
-        pdf.setDrawColor(200,200,200); pdf.setLineWidth(0.4); pdf.rect(ML, y, CW, bh, 'S');
-        y += 9;
-        for (const line of lines) {
-          if (y + lh > PH - MB) { pdf.addPage(); fillRect(ML, MT, CW, PH - MT - MB, '#f3f4f6'); y = MT + 9; }
-          setFontMono(9); pdf.text(line, ML + 9, y); y += lh;
+        const lh = PRE_SIZE * 1.5;
+        const vPad = 14;
+        // ascent/descent for courier 9pt
+        const ascOffset = PRE_SIZE * 0.75;
+        const descent   = PRE_SIZE * 0.25;
+
+        newPageIfNeeded(Math.min(lines.length * lh + vPad, 80));
+
+        let segTop = y;
+        let segLines = [];
+
+        function flushCodeSegment(segBottom) {
+          const sh = segBottom - segTop;
+          if (sh <= 0) return;
+          fillRect(ML, segTop, CW, sh, '#f3f4f6');
+          pdf.setDrawColor(200, 200, 200); pdf.setLineWidth(0.4);
+          pdf.rect(ML, segTop, CW, sh, 'S');
+          setFontMono(PRE_SIZE);
+          for (const { text: t, ty } of segLines) pdf.text(t, ML + 9, ty);
+          segLines = [];
         }
-        y += 9; return;
+
+        // First baseline: rect-top + half-vPad + ascender
+        y = segTop + vPad / 2 + ascOffset;
+        let lastBaseline = y;
+
+        for (let i = 0; i < lines.length; i++) {
+          const remaining = lines.length - 1 - i;
+          const needed = descent + vPad / 2 + remaining * lh;
+          if (y + needed > PH - MB) {
+            flushCodeSegment(PH - MB);
+            pdf.addPage();
+            segTop = MT;
+            y = MT + vPad / 2 + ascOffset;
+          }
+          segLines.push({ text: lines[i], ty: y });
+          lastBaseline = y;
+          if (i < lines.length - 1) y += lh;
+        }
+
+        const finalBottom = lastBaseline + descent + vPad / 2;
+        flushCodeSegment(finalBottom);
+        y = finalBottom + 4;
+        return;
       }
 
       if (tag === 'ul' || tag === 'ol') {
         let idx = 1;
         for (const li of el.children) {
           if (li.tagName.toLowerCase() !== 'li') continue;
-          setFont(false, false, 11, '#1a1a1a');
+          const LI_SIZE = 11;
+          const lh = LI_SIZE * 1.45;
           const bullet = tag === 'ul' ? '•' : (idx++) + '.';
-          const lines = pdf.splitTextToSize(plain(li), CW - 16);
-          const lh = 11 * 1.45;
+          // Draw bullet first
+          setFont(false, false, LI_SIZE, '#1a1a1a');
           newPageIfNeeded(lh);
           pdf.text(bullet, ML + 4, y);
-          for (const line of lines) { newPageIfNeeded(lh); pdf.text(line, ML + 15, y); y += lh; }
-          y += 1;
+          // Render inline content with inline-aware renderer (indented)
+          // We capture y before and restore nothing — writeInline advances y itself.
+          const yBefore = y;
+          writeInline(li, ML + 15, CW - 16, LI_SIZE, '#1a1a1a', 1);
+          // If writeInline produced nothing (empty li), advance one line
+          if (y === yBefore) y += lh;
         }
         y += 4; return;
       }
@@ -1489,7 +1762,7 @@ function applyLayoutWidths(sidebarPx, editorPct) {
   if (!layoutEnabled) return;
 
   const sidebarPxClamped  = Math.max(140, Math.min(420, sidebarPx  || 200));
-  const editorPctClamped  = Math.max(20,  Math.min(80,  editorPct  || 50));
+  const editorPctClamped  = Math.max(20,  Math.min(80,  editorPct  || 55));
   const previewPct        = 100 - editorPctClamped;
 
   // Sidebar
@@ -1520,7 +1793,7 @@ function applyLayoutWidths(sidebarPx, editorPct) {
 }
 
 function resetLayoutWidths() {
-  applyLayoutWidths(200, 50);
+  applyLayoutWidths(200, 55);
   saveConfig();
 }
 
@@ -2021,7 +2294,7 @@ clearPreloadClasses();
       // with the slider defaults — any previously-set ratio appeared to
       // "win" purely by flex leftover, not by the layout system.
       document.getElementById('divider').classList.add('locked');
-      const w = cfg.layoutWidths || { sidebar: 200, editorPct: 50 };
+      const w = cfg.layoutWidths || { sidebar: 200, editorPct: 55 };
       applyLayoutWidths(w.sidebar, w.editorPct);
     }
     // (warning footer: show unless user has explicitly dismissed it)

@@ -379,7 +379,17 @@ html, body {
 
 /* ── Panes ─────────────────────────────────────── */
 #panes { min-width: 0; }
-.pane { min-width: 0; }
+/* flex-basis: 0 (not the Bootstrap .flex-grow-1 default of `auto`) makes
+   the split exact and content-independent. With `auto`, each pane's
+   starting size is its own content's preferred width — CodeMirror's
+   gutter vs. the preview's padding differ, so equal flex-grow on unequal
+   bases settled at ~55/45 by accident instead of the intended ratio.
+   Default split is 55% editor / 45% preview, set via flex-grow below —
+   this only applies when no inline flex/width override is present (i.e.
+   layout mode disabled and the divider hasn't been dragged). */
+.pane { min-width: 0; flex-basis: 0; }
+#left-pane  { flex-grow: 55; }
+#right-pane { flex-grow: 45; }
 
 .pane-label {
   display: flex;

@@ -139,11 +139,11 @@
       <label class="layout-label">Sidebar <span id="layout-val-sidebar">200</span>px</label>
       <input type="range" id="layout-slider-sidebar" class="layout-slider" min="140" max="420" step="5" value="200" />
 
-      <label class="layout-label">Editor <span id="layout-val-editor">50</span>%</label>
-      <input type="range" id="layout-slider-editor" class="layout-slider" min="20" max="80" step="1" value="50" />
+      <label class="layout-label">Editor <span id="layout-val-editor">55</span>%</label>
+      <input type="range" id="layout-slider-editor" class="layout-slider" min="20" max="80" step="1" value="55" />
 
-      <label class="layout-label">Preview <span id="layout-val-preview">50</span>%</label>
-      <input type="range" id="layout-slider-preview" class="layout-slider" min="20" max="80" step="1" value="50" disabled />
+      <label class="layout-label">Preview <span id="layout-val-preview">45</span>%</label>
+      <input type="range" id="layout-slider-preview" class="layout-slider" min="20" max="80" step="1" value="45" disabled />
     </div>
 
     <button id="layout-reset" onclick="resetLayoutWidths()">reset to defaults</button>
@@ -180,7 +180,7 @@
 
       <!-- Side-by-side panes -->
       <div id="panes" class="d-flex flex-grow-1 overflow-hidden">
-        <div class="pane d-flex flex-column flex-grow-1 overflow-hidden" id="left-pane">
+        <div class="pane d-flex flex-column overflow-hidden" id="left-pane">
           <div id="editor-wrap" class="flex-grow-1 d-flex overflow-hidden">
             <div id="cm-host" class="wrap"></div>
           </div>
@@ -188,7 +188,7 @@
 
         <div id="divider" class="locked"></div>
 
-        <div class="pane d-flex flex-column flex-grow-1 overflow-hidden" id="right-pane">
+        <div class="pane d-flex flex-column overflow-hidden" id="right-pane">
           <div id="preview" class="wrap"></div>
         </div>
       </div>
