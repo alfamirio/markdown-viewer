@@ -1,4 +1,4 @@
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
 
     /* ── Tokens ───────────────────────────────────────── */
     :root {
@@ -216,7 +216,14 @@
       text-transform: uppercase;
       color: var(--text-dim);
     }
-    #btn-new-note {
+    .sidebar-header-btns {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    #btn-new-note,
+    #btn-new-note-template {
       padding: 2px 7px;
       font-size: 16px;
       line-height: 1;
@@ -230,6 +237,8 @@
       transition: background 0.1s, color 0.1s, opacity 0.1s;
     }
     #btn-new-note:hover { background: var(--border); color: var(--accent); opacity: 1; }
+    #btn-new-note-template { font-size: 13px; opacity: 0.6; }
+    #btn-new-note-template:hover { background: var(--border); color: var(--orange); opacity: 1; }
 
     #notes-list {
       flex: 1;
@@ -1116,4 +1125,3 @@
       color: var(--text-muted);
       text-align: center;
     }
-

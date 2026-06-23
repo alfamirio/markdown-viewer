@@ -15,7 +15,8 @@ const btnWrap      = document.getElementById('btn-wrap');
 const btnHighlight = document.getElementById('btn-highlight');
 const notesList    = document.getElementById('notes-list');
 const btnSidebar   = document.getElementById('btn-sidebar');
-document.getElementById('btn-new-note').addEventListener('click', () => createNote());
+document.getElementById('btn-new-note').addEventListener('click', () => createNote(undefined, ''));
+document.getElementById('btn-new-note-template').addEventListener('click', () => createNote());
 
 function activeNoteName() {
   const note = notes.find(n => n.id === activeId);
