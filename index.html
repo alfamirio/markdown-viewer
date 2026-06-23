@@ -260,7 +260,29 @@
       background: var(--code-bg);
       border-radius: 3px;
       padding: 1px 4px;
+      outline: 1px solid var(--accent);
+      outline-offset: 0px;
     }
+
+    .note-item.renaming {
+      background: var(--surface) !important;
+    }
+
+    .note-rename {
+      opacity: 0;
+      border: none;
+      background: transparent;
+      color: var(--text-dim);
+      font-size: 12px;
+      cursor: pointer;
+      padding: 4px 5px;
+      border-radius: 4px;
+      line-height: 1;
+      transition: opacity 0.1s, color 0.1s;
+      flex-shrink: 0;
+    }
+    .note-item:hover .note-rename { opacity: 1; }
+    .note-rename:hover { color: var(--accent); background: var(--accent-dim); }
 
     .note-delete {
       opacity: 0;
@@ -1168,7 +1190,7 @@
     <div id="sidebar">
       <div id="sidebar-header">
         <span>Notes</span>
-        <button id="btn-new-note" data-tip="New note" onclick="createNote()">+</button>
+        <button id="btn-new-note" data-tip="New note">+</button>
       </div>
       <div id="notes-list"></div>
 
@@ -1187,16 +1209,9 @@
     <!-- ── Editor area ── -->
     <div id="editor-area">
 
-      <!-- Active note title -->
-      <div id="note-titlebar">
-        <input id="note-title-input" type="text" spellcheck="false" placeholder="Untitled note"
-               oninput="renameCurrentNote(this.value)" />
-      </div>
-
       <!-- Side-by-side panes -->
       <div id="panes">
         <div class="pane" id="left-pane">
-          <div class="pane-label"><span class="dot dot-editor"></span>editor</div>
           <div id="editor-wrap">
             <div id="cm-host" class="wrap"></div>
           </div>
@@ -1205,7 +1220,6 @@
         <div id="divider"></div>
 
         <div class="pane" id="right-pane">
-          <div class="pane-label"><span class="dot dot-preview"></span>preview</div>
           <div id="preview" class="wrap"></div>
         </div>
       </div>
@@ -1546,7 +1560,12 @@ const lineEl       = document.getElementById('line-count');
 const btnWrap      = document.getElementById('btn-wrap');
 const btnHighlight = document.getElementById('btn-highlight');
 const notesList    = document.getElementById('notes-list');
-const noteTitleEl  = document.getElementById('note-title-input');
+  document.getElementById('btn-new-note').addEventListener('click', () => createNote());
+const noteTitleEl  = { value: '', select() {} }; // title bar removed
+function activeNoteName() {
+  const note = notes.find(n => n.id === activeId);
+  return (note && note.name.trim()) ? note.name.trim() : 'note';
+}
 const btnSidebar   = document.getElementById('btn-sidebar');
 
 // ═══════════════════════════════════════════════════
@@ -1569,6 +1588,12 @@ function saveContent(id, text) {
   try {
     localStorage.setItem(noteContent(id), text);
   } catch(e) {
+    // Stop the autosave timer — no point retrying when storage is full.
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    // Show a persistent error state (both text and colour) so the user
+    // knows the note was NOT saved, not just "unsaved".
+    saveEl.className   = 'unsaved';
     saveEl.textContent = '✕ storage full';
   }
 }
@@ -1585,20 +1610,29 @@ function createNote(name, content) {
   saveIndex();
   saveContent(id, content ?? DEFAULT_CONTENT(name));
   switchNote(id);
-  renderSidebar();
-  // Focus title for immediate rename
-  setTimeout(() => { noteTitleEl.select(); }, 50);
+  // Focus sidebar name input for immediate rename
+  setTimeout(() => {
+    const nameInput = notesList.querySelector(`.note-item[data-id="${id}"] .note-name`);
+    if (nameInput) { nameInput.readOnly = false; nameInput.focus(); nameInput.select(); nameInput.closest('.note-item').classList.add('renaming'); }
+  }, 50);
   return id;
 }
 
 function deleteNote(id) {
+  const note = notes.find(n => n.id === id);
+  const name = note ? note.name : 'this note';
+
   if (notes.length === 1) {
-    // Don't delete the last note — just clear it
+    // Last note: confirm clear rather than delete
+    if (!confirm(`Clear the contents of "${name}"?\n\nThe note itself will be kept (it's your last one).`)) return;
     editor.value = '';
     render();
     scheduleSave();
     return;
   }
+
+  if (!confirm(`Delete "${name}"?`)) return;
+
   const idx = notes.findIndex(n => n.id === id);
   notes.splice(idx, 1);
   localStorage.removeItem(noteContent(id));
@@ -1606,11 +1640,9 @@ function deleteNote(id) {
   // Switch to adjacent note
   const nextIdx = Math.min(idx, notes.length - 1);
   switchNote(notes[nextIdx].id);
-  renderSidebar();
 }
 
 function deleteCurrentNote() {
-  if (!confirm('Delete this note?')) return;
   deleteNote(activeId);
 }
 
@@ -1632,7 +1664,7 @@ function switchNote(id) {
   activeId = id;
   const note = notes.find(n => n.id === id);
   editor.value = loadContent(id);
-  noteTitleEl.value = note ? note.name : '';
+  // noteTitleEl removed
   render();
   markSaved();
   renderSidebar();
@@ -1658,43 +1690,66 @@ function renderSidebar() {
     nameEl.className = 'note-name';
     nameEl.value = note.name;
     nameEl.spellcheck = false;
-    nameEl.title = 'Click to open · Double-click to rename';
-    nameEl.dataset.tip = 'Click to open · Double-click to rename';
+    nameEl.readOnly = true;
+    nameEl.dataset.tip = 'Click to open · double-click or ✎ to rename';
 
-    // Single click → switch note
-    nameEl.addEventListener('mousedown', e => {
-      if (note.id !== activeId) {
-        e.preventDefault();
-        switchNote(note.id);
-      }
-    });
-    // Double-click → let input be editable
-    nameEl.addEventListener('dblclick', e => { nameEl.focus(); nameEl.select(); });
-    nameEl.addEventListener('blur', () => {
+    function startRename() {
+      nameEl.readOnly = false;
+      item.classList.add('renaming');
+      nameEl.focus();
+      nameEl.select();
+    }
+
+    function commitRename() {
+      nameEl.readOnly = true;
+      item.classList.remove('renaming');
       note.name = nameEl.value.trim() || 'Untitled';
       nameEl.value = note.name;
-      if (note.id === activeId) noteTitleEl.value = note.name;
       saveIndex();
+    }
+
+    // Single click → switch note (if not active); if already active, start rename
+    nameEl.addEventListener('click', e => {
+      if (note.id !== activeId) {
+        switchNote(note.id);
+      } else if (nameEl.readOnly) {
+        startRename();
+      }
     });
+    // Double-click → rename regardless
+    nameEl.addEventListener('dblclick', e => { startRename(); });
+
+    nameEl.addEventListener('blur', commitRename);
     nameEl.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); }
-      if (e.key === 'Escape') { nameEl.value = note.name; nameEl.blur(); }
+      if (e.key === 'Enter')  { e.preventDefault(); nameEl.blur(); }
+      if (e.key === 'Escape') { nameEl.value = note.name; nameEl.readOnly = true; item.classList.remove('renaming'); nameEl.blur(); }
     });
     // Prevent sidebar-input typing from triggering editor shortcuts
     nameEl.addEventListener('input', e => e.stopPropagation());
+
+    // Rename button (pencil)
+    const renameBtn = document.createElement('button');
+    renameBtn.className = 'note-rename';
+    renameBtn.textContent = '✎';
+    renameBtn.dataset.tip = 'Rename note';
+    renameBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (note.id !== activeId) switchNote(note.id);
+      setTimeout(startRename, 0);
+    });
 
     // Delete button
     const delBtn = document.createElement('button');
     delBtn.className = 'note-delete';
     delBtn.textContent = '×';
-    delBtn.title = 'Delete note';
     delBtn.dataset.tip = 'Delete note';
     delBtn.addEventListener('click', e => {
       e.stopPropagation();
-      if (notes.length === 1 || confirm(`Delete "${note.name}"?`)) deleteNote(note.id);
+      deleteNote(note.id);
     });
 
     item.appendChild(nameEl);
+    item.appendChild(renameBtn);
     item.appendChild(delBtn);
     notesList.appendChild(item);
   });
@@ -1841,9 +1896,7 @@ function scheduleSave() {
 editor.addEventListener('input', () => { render(); scheduleSave(); });
 
 // Title input
-noteTitleEl.addEventListener('input', e => {
-  renameCurrentNote(e.target.value);
-});
+// noteTitleEl listener removed (title bar removed)
 
 // ═══════════════════════════════════════════════════
 //  Keyboard shortcuts
@@ -2024,7 +2077,7 @@ function toggleHighlight() {
 // ═══════════════════════════════════════════════════
 function printFallback() {
   const prev = document.title;
-  document.title = (noteTitleEl.value.trim() || 'note');
+  document.title = activeNoteName();
   window.print();
   document.title = prev;
 }
@@ -2075,7 +2128,7 @@ async function exportPdf() {
   pdfProgress(true, 'Building PDF…');
 
   try {
-    const title = noteTitleEl.value.trim() || 'note';
+    const title = activeNoteName();
     const { jsPDF } = window.jspdf;
 
     const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
@@ -2296,40 +2349,42 @@ async function exportPdf() {
 
   } catch (err) {
     console.error('PDF export failed:', err);
-    pdfProgress(false);
     if (confirm('PDF export failed. Use the browser print dialog instead?')) printFallback();
+  } finally {
+    // Always restore mermaid to the app's dark theme (exportPdf temporarily
+    // switches it to 'neutral' for the PDF render — if we only did this on
+    // success, a failed export would leave all live preview diagrams light-themed
+    // until the page was reloaded).
+    mermaid.initialize({
+      startOnLoad: false, theme: 'dark', darkMode: true, securityLevel: 'loose',
+      flowchart: { curve: 'basis' },
+      themeVariables: {
+        background:'#161b22', primaryColor:'#1f4068', primaryTextColor:'#e6edf3',
+        primaryBorderColor:'#58a6ff', lineColor:'#58a6ff', secondaryColor:'#1c2128',
+        tertiaryColor:'#21262d', edgeLabelBackground:'#161b22',
+        clusterBkg:'#1c2128', titleColor:'#e6edf3', nodeTextColor:'#e6edf3',
+      },
+    });
+
+    document.getElementById('pdf-render-root').innerHTML = '';
+    pdfProgress(false);
     btn.classList.remove('printing');
-    return;
   }
-
-  mermaid.initialize({
-    startOnLoad: false, theme: 'dark', darkMode: true, securityLevel: 'loose',
-    flowchart: { curve: 'basis' },
-    themeVariables: {
-      background:'#161b22', primaryColor:'#1f4068', primaryTextColor:'#e6edf3',
-      primaryBorderColor:'#58a6ff', lineColor:'#58a6ff', secondaryColor:'#1c2128',
-      tertiaryColor:'#21262d', edgeLabelBackground:'#161b22',
-      clusterBkg:'#1c2128', titleColor:'#e6edf3', nodeTextColor:'#e6edf3',
-    },
-  });
-
-  document.getElementById('pdf-render-root').innerHTML = '';
-  pdfProgress(false);
-  btn.classList.remove('printing');
 }
 function downloadMd() {
   const blob = new Blob([editor.value], { type: 'text/markdown' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = (noteTitleEl.value.trim() || 'note') + '.md';
+  a.download = activeNoteName() + '.md';
   a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 100);
 }
 
 // ═══════════════════════════════════════════════════
 //  Export to standalone HTML
 // ═══════════════════════════════════════════════════
 function exportHtml() {
-  const title   = noteTitleEl.value.trim() || 'note';
+  const title   = activeNoteName();
   const bodyHtml = preview.innerHTML;
 
   const html = `<!DOCTYPE html>
@@ -2337,7 +2392,7 @@ function exportHtml() {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${title.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</title>
+  <title>${title.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -2476,6 +2531,7 @@ ${bodyHtml}
   a.href = URL.createObjectURL(blob);
   a.download = title + '.html';
   a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 100);
 }
 
 // ═══════════════════════════════════════════════════
@@ -2562,11 +2618,10 @@ function tocJump(lineIndex) {
   // Also scroll preview to matching heading
   const headings = preview.querySelectorAll('h1,h2,h3,h4,h5,h6');
   let hIdx = 0;
-  const lines2 = editor.value.split('\n');
   let inCode = false;
   for (let i = 0; i < lineIndex; i++) {
-    if (/^`{3,}/.test(lines2[i])) { inCode = !inCode; continue; }
-    if (!inCode && /^#{1,6}\s/.test(lines2[i])) hIdx++;
+    if (/^`{3,}/.test(lines[i])) { inCode = !inCode; continue; }
+    if (!inCode && /^#{1,6}\s/.test(lines[i])) hIdx++;
   }
   if (headings[hIdx]) headings[hIdx].scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -2615,11 +2670,25 @@ function tocJump(lineIndex) {
 })();
 
 
+let _copyRestoreTimer = null;
 function copyRaw() {
   navigator.clipboard.writeText(editor.value).then(() => {
-    const prev = saveEl.textContent;
+    // Capture both pieces of state so we can restore them faithfully.
+    // We only snapshot once — if a copy is already in flight, the
+    // timer below has already been cancelled so prevText/prevClass
+    // still hold the pre-copy values from the first call.
+    if (_copyRestoreTimer === null) {
+      copyRaw._prevText  = saveEl.textContent;
+      copyRaw._prevClass = saveEl.className;
+    }
+    clearTimeout(_copyRestoreTimer);
     saveEl.textContent = '✓ copied!';
-    setTimeout(() => { saveEl.textContent = prev; }, 1500);
+    saveEl.className   = '';           // neutral — no saved/unsaved colour
+    _copyRestoreTimer = setTimeout(() => {
+      saveEl.textContent = copyRaw._prevText;
+      saveEl.className   = copyRaw._prevClass;
+      _copyRestoreTimer  = null;
+    }, 1500);
   });
 }
 
@@ -2662,34 +2731,36 @@ function setViewMode(mode) {
 
   saveConfig();
 }
-// ═══════════════════════════════════════════════════
-const divider  = document.getElementById('divider');
-const leftPane = document.getElementById('left-pane');
-const rightPane= document.getElementById('right-pane');
-let dragging   = false;
+// ── Pane divider drag ─────────────────────────────
+(function() {
+  const divider  = document.getElementById('divider');
+  const leftPane = document.getElementById('left-pane');
+  const rightPane= document.getElementById('right-pane');
+  let dragging   = false;
 
-divider.addEventListener('mousedown', () => {
-  dragging = true;
-  divider.classList.add('dragging');
-  document.body.style.cursor = 'col-resize';
-  document.body.style.userSelect = 'none';
-});
-document.addEventListener('mousemove', e => {
-  if (!dragging) return;
-  const rect  = document.getElementById('panes').getBoundingClientRect();
-  const pct   = Math.max(20, Math.min(80, (e.clientX - rect.left) / (rect.width - divider.offsetWidth) * 100));
-  leftPane.style.flex  = 'none';
-  leftPane.style.width = pct + '%';
-  rightPane.style.flex  = 'none';
-  rightPane.style.width = (100 - pct) + '%';
-});
-document.addEventListener('mouseup', () => {
-  if (!dragging) return;
-  dragging = false;
-  divider.classList.remove('dragging');
-  document.body.style.cursor = '';
-  document.body.style.userSelect = '';
-});
+  divider.addEventListener('mousedown', () => {
+    dragging = true;
+    divider.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const rect  = document.getElementById('panes').getBoundingClientRect();
+    const pct   = Math.max(20, Math.min(80, (e.clientX - rect.left) / (rect.width - divider.offsetWidth) * 100));
+    leftPane.style.flex  = 'none';
+    leftPane.style.width = pct + '%';
+    rightPane.style.flex  = 'none';
+    rightPane.style.width = (100 - pct) + '%';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    divider.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+})();
 
 // ═══════════════════════════════════════════════════
 //  Default content
@@ -3044,10 +3115,8 @@ Object.assign(window, {
     if (!picker.contains(e.target) && e.target.id !== 'btn-table') close();
   }
 
-  document.getElementById('btn-table').addEventListener('click', function(e) { window.openTablePicker(e); });
-
-  window.openTablePicker = function (e) {
-    const btn = e.currentTarget;
+  window.openTablePicker = function(e) {
+    const btn = e.currentTarget || e.target;
     const rect = btn.getBoundingClientRect();
     picker.style.left = rect.left + 'px';
     picker.style.top  = (rect.bottom + 4) + 'px';
@@ -3057,6 +3126,8 @@ Object.assign(window, {
       setTimeout(() => document.addEventListener('mousedown', outsideClick, true), 0);
     }
   };
+
+  document.getElementById('btn-table').addEventListener('click', window.openTablePicker);
 
   function insertTable(rows, cols) {
     const header = '| ' + Array(cols).fill('Header').join(' | ') + ' |';
