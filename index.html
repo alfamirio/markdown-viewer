@@ -46,14 +46,26 @@
     /* ── Toolbar ──────────────────────────────────────── */
     #toolbar {
       display: flex;
-      align-items: center;
-      gap: 4px;
-      padding: 6px 12px;
+      flex-direction: column;
       background: var(--surface);
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
       user-select: none;
       min-width: 0;
+    }
+
+    .toolbar-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 12px;
+      min-width: 0;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .toolbar-row::-webkit-scrollbar { display: none; }
+    .toolbar-row + .toolbar-row {
+      border-top: 1px solid var(--divider);
     }
 
     .toolbar-brand {
@@ -1025,66 +1037,73 @@
 
   <!-- ── Toolbar ── -->
   <div id="toolbar">
-    <span class="toolbar-brand">// md viewer</span>
 
-    <!-- Toggle sidebar -->
-    <button class="btn btn-icon active" id="btn-sidebar" data-tip="Toggle notes panel" onclick="toggleSidebar()">☰</button>
-    <button class="btn btn-icon active" id="btn-toc-toolbar" data-tip="Toggle table of contents" onclick="toggleToc()">§</button>
+    <!-- Row 1: Viewer controls -->
+    <div class="toolbar-row">
+      <span class="toolbar-brand">// md viewer</span>
 
-    <div class="toolbar-sep"></div>
+      <button class="btn btn-icon active" id="btn-sidebar" data-tip="Toggle notes panel" onclick="toggleSidebar()">☰</button>
+      <button class="btn btn-icon active" id="btn-toc-toolbar" data-tip="Toggle table of contents" onclick="toggleToc()">§</button>
 
-    <!-- Format -->
-    <button class="btn btn-icon" data-tip="Bold  Ctrl+B"        onclick="fmt('**','**')"><b>B</b></button>
-    <button class="btn btn-icon" data-tip="Italic  Ctrl+I"      onclick="fmt('_','_')"><i>I</i></button>
-    <button class="btn btn-icon" data-tip="Strikethrough"        onclick="fmt('~~','~~')" style="text-decoration:line-through">S</button>
-    <button class="btn btn-icon" data-tip="Inline code  Ctrl+`" onclick="fmt('`','`')" style="font-size:11px">{ }</button>
+      <div class="toolbar-sep"></div>
 
-    <div class="toolbar-sep"></div>
+      <button class="btn" id="btn-wrap" data-tip="Toggle word wrap" onclick="toggleWrap()">wrap</button>
+      <button class="btn active" id="btn-highlight" data-tip="Toggle syntax highlighting" onclick="toggleHighlight()">highlight</button>
 
-    <button class="btn" data-tip="Heading 1" onclick="fmtLine('# ')">H1</button>
-    <button class="btn" data-tip="Heading 2" onclick="fmtLine('## ')">H2</button>
-    <button class="btn" data-tip="Heading 3" onclick="fmtLine('### ')">H3</button>
+      <div class="toolbar-sep"></div>
 
-    <div class="toolbar-sep"></div>
+      <button class="btn" data-tip="Load .md file"         onclick="loadMd()">↑ .md</button>
+      <input type="file" id="md-file-input" accept=".md,.markdown,.txt" style="display:none" onchange="onMdFileLoad(event)" />
+      <button class="btn" data-tip="Download .md"          onclick="downloadMd()">↓ .md</button>
+      <button class="btn" id="btn-pdf" data-tip="Export PDF" onclick="exportPdf()">↓ .pdf</button>
+      <button class="btn" data-tip="Export standalone HTML" onclick="exportHtml()">↓ .html</button>
+      <button class="btn" data-tip="Copy raw markdown"     onclick="copyRaw()">⎘ copy</button>
 
-    <button class="btn" data-tip="Unordered list" onclick="fmtLine('- ')">— ul</button>
-    <button class="btn" data-tip="Ordered list"   onclick="fmtLine('1. ')">1. ol</button>
-    <button class="btn" data-tip="Blockquote"     onclick="fmtLine('> ')">&gt; bq</button>
-    <button class="btn" data-tip="Code block"     onclick="fmtBlock()">``` block</button>
-    <button class="btn" data-tip="Horizontal rule" onclick="insertText('\n---\n')">— hr</button>
-    <button class="btn" data-tip="Link"            onclick="insertLink()">🔗 link</button>
+      <div class="toolbar-sep"></div>
 
-    <div class="toolbar-sep"></div>
+      <!-- View mode toggle -->
+      <div class="view-toggle" id="view-toggle">
+        <button class="btn" id="btn-view-editor"  data-tip="Editor only  Alt+1"   onclick="setViewMode('editor')">editor</button>
+        <button class="btn active" id="btn-view-both"    data-tip="Editor + Preview  Alt+2" onclick="setViewMode('both')">both</button>
+        <button class="btn" id="btn-view-preview" data-tip="Preview only  Alt+3"  onclick="setViewMode('preview')">preview</button>
+      </div>
 
-    <button class="btn" id="btn-wrap" data-tip="Toggle word wrap" onclick="toggleWrap()">wrap</button>
-    <button class="btn active" id="btn-highlight" data-tip="Toggle syntax highlighting" onclick="toggleHighlight()">highlight</button>
+      <div class="toolbar-sep"></div>
 
-    <div class="toolbar-sep"></div>
+      <button class="btn" data-tip="Keyboard shortcuts  ?" onclick="openHkModal()">? keys</button>
 
-    <button class="btn" data-tip="Load .md file"         onclick="loadMd()">↑ .md</button>
-    <input type="file" id="md-file-input" accept=".md,.markdown,.txt" style="display:none" onchange="onMdFileLoad(event)" />
-    <button class="btn" data-tip="Download .md"          onclick="downloadMd()">↓ .md</button>
-    <button class="btn" id="btn-pdf" data-tip="Export PDF" onclick="exportPdf()">↓ .pdf</button>
-    <button class="btn" data-tip="Export standalone HTML" onclick="exportHtml()">↓ .html</button>
-    <button class="btn" data-tip="Copy raw markdown"     onclick="copyRaw()">⎘ copy</button>
-    <button class="btn" data-tip="Keyboard shortcuts  ?" onclick="openHkModal()" style="margin-left:4px">? keys</button>
-
-    <div class="toolbar-sep"></div>
-
-    <!-- View mode toggle -->
-    <div class="view-toggle" id="view-toggle">
-      <button class="btn" id="btn-view-editor"  data-tip="Editor only  Alt+1"   onclick="setViewMode('editor')">editor</button>
-      <button class="btn active" id="btn-view-both"    data-tip="Editor + Preview  Alt+2" onclick="setViewMode('both')">both</button>
-      <button class="btn" id="btn-view-preview" data-tip="Preview only  Alt+3"  onclick="setViewMode('preview')">preview</button>
+      <div id="status">
+        <span id="word-count" class="stat">0 words</span>
+        <span class="stat-sep">·</span>
+        <span id="line-count" class="stat">0 lines</span>
+        <span id="save-indicator" class="saved">● saved</span>
+        <button id="btn-reset-all" data-tip="Delete all notes & reset app" onclick="resetAllData()">🗑</button>
+      </div>
     </div>
 
-    <div id="status">
-      <span id="word-count" class="stat">0 words</span>
-      <span class="stat-sep">·</span>
-      <span id="line-count" class="stat">0 lines</span>
-      <span id="save-indicator" class="saved">● saved</span>
-      <button id="btn-reset-all" data-tip="Delete all notes & reset app" onclick="resetAllData()">🗑</button>
+    <!-- Row 2: Markdown formatting -->
+    <div class="toolbar-row">
+      <button class="btn btn-icon" data-tip="Bold  Ctrl+B"        onclick="fmt('**','**')"><b>B</b></button>
+      <button class="btn btn-icon" data-tip="Italic  Ctrl+I"      onclick="fmt('_','_')"><i>I</i></button>
+      <button class="btn btn-icon" data-tip="Strikethrough"        onclick="fmt('~~','~~')" style="text-decoration:line-through">S</button>
+      <button class="btn btn-icon" data-tip="Inline code  Ctrl+`" onclick="fmt('`','`')" style="font-size:11px">{ }</button>
+
+      <div class="toolbar-sep"></div>
+
+      <button class="btn" data-tip="Heading 1" onclick="fmtLine('# ')">H1</button>
+      <button class="btn" data-tip="Heading 2" onclick="fmtLine('## ')">H2</button>
+      <button class="btn" data-tip="Heading 3" onclick="fmtLine('### ')">H3</button>
+
+      <div class="toolbar-sep"></div>
+
+      <button class="btn" data-tip="Unordered list" onclick="fmtLine('- ')">— ul</button>
+      <button class="btn" data-tip="Ordered list"   onclick="fmtLine('1. ')">1. ol</button>
+      <button class="btn" data-tip="Blockquote"     onclick="fmtLine('> ')">&gt; bq</button>
+      <button class="btn" data-tip="Code block"     onclick="fmtBlock()">``` block</button>
+      <button class="btn" data-tip="Horizontal rule" onclick="insertText('\n---\n')">— hr</button>
+      <button class="btn" data-tip="Link"            onclick="insertLink()">🔗 link</button>
     </div>
+
   </div>
 
   <!-- ── Body row ── -->
@@ -2897,7 +2916,7 @@ Object.assign(window, {
   });
 
   function position(e) {
-    const pad = 12;
+    const pad = 20;
     const bw = box.offsetWidth, bh = box.offsetHeight;
     let x = e.clientX - bw / 2;
     let y = e.clientY - bh - pad;
