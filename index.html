@@ -58,6 +58,7 @@
       <button class="btn btn-toolbar" id="btn-wrap"        data-tip="Toggle word wrap"                              onclick="toggleWrap()">wrap</button>
       <button class="btn btn-toolbar active" id="btn-highlight"  data-tip="Toggle syntax highlighting"              onclick="toggleHighlight()">highlight</button>
       <button class="btn btn-toolbar active" id="btn-sync-scroll" data-tip="Link/unlink scroll between editor and preview" onclick="toggleSyncScroll()">⇅ sync</button>
+      <button class="btn btn-toolbar active" id="btn-layout" data-tip="Custom layout widths — click to open/close" onclick="toggleLayoutPanel()">⊞ layout</button>
 
       <div class="toolbar-sep"></div>
 
@@ -124,6 +125,30 @@
     <div id="table-picker-label">0 × 0</div>
   </div>
 
+  <!-- ── Layout panel popup ── -->
+  <div id="layout-panel">
+    <div class="layout-panel-header">
+      <span class="layout-panel-title">Layout widths</span>
+      <label class="layout-toggle-label" data-tip="Enable / disable custom widths">
+        <input type="checkbox" id="layout-enabled-checkbox" checked />
+        <span class="layout-toggle-text">enabled</span>
+      </label>
+    </div>
+
+    <div id="layout-sliders">
+      <label class="layout-label">Sidebar <span id="layout-val-sidebar">200</span>px</label>
+      <input type="range" id="layout-slider-sidebar" class="layout-slider" min="140" max="420" step="5" value="200" />
+
+      <label class="layout-label">Editor <span id="layout-val-editor">50</span>%</label>
+      <input type="range" id="layout-slider-editor" class="layout-slider" min="20" max="80" step="1" value="50" />
+
+      <label class="layout-label">Preview <span id="layout-val-preview">50</span>%</label>
+      <input type="range" id="layout-slider-preview" class="layout-slider" min="20" max="80" step="1" value="50" disabled />
+    </div>
+
+    <button id="layout-reset" onclick="resetLayoutWidths()">reset to defaults</button>
+  </div>
+
   <!-- ── Body row ── -->
   <div id="body-row" class="d-flex flex-grow-1 overflow-hidden">
 
@@ -161,7 +186,7 @@
           </div>
         </div>
 
-        <div id="divider"></div>
+        <div id="divider" class="locked"></div>
 
         <div class="pane d-flex flex-column flex-grow-1 overflow-hidden" id="right-pane">
           <div id="preview" class="wrap"></div>

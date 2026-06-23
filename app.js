@@ -24,6 +24,7 @@ function activeNoteName() {
 }
 
 let isInitializing = true;
+let layoutEnabled  = true;
 
 // ═══════════════════════════════════════════════════
 //  Notes state
@@ -253,8 +254,19 @@ function renderSidebar() {
 
 // ── Sidebar toggle ─────────────────────────────────
 function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('collapsed');
+  const sidebarEl = document.getElementById('sidebar');
+  sidebarEl.classList.toggle('collapsed');
   btnSidebar.classList.toggle('active');
+  if (sidebarEl.classList.contains('collapsed')) {
+    // Inline width (set by the layout panel) has higher specificity than
+    // the #sidebar.collapsed { width: 0 } rule and would otherwise pin the
+    // sidebar at its custom width — invisible (opacity: 0) but still taking
+    // up space, so the editor never reclaims it. Clear it so collapse works.
+    sidebarEl.style.width = '';
+  } else if (layoutEnabled && sidebarEl.dataset.layoutWidth) {
+    // Re-apply custom width when un-collapsing (collapsed CSS sets width:0)
+    sidebarEl.style.width = sidebarEl.dataset.layoutWidth + 'px';
+  }
   saveConfig();
 }
 
@@ -1460,6 +1472,161 @@ const copyRaw = (() => {
 })()
 
 // ═══════════════════════════════════════════════════
+//  Custom layout widths
+// ═══════════════════════════════════════════════════
+// Returns the current slider values as a plain object for persistence.
+function getLayoutWidths() {
+  return {
+    sidebar:   parseInt(document.getElementById('layout-slider-sidebar').value, 10),
+    editorPct: parseInt(document.getElementById('layout-slider-editor').value, 10),
+  };
+}
+
+// Applies sidebar px width and editor/preview percentage split to the DOM
+// and keeps the slider UI in sync. Called both from user interaction and
+// from config restore on startup.
+function applyLayoutWidths(sidebarPx, editorPct) {
+  if (!layoutEnabled) return;
+
+  const sidebarPxClamped  = Math.max(140, Math.min(420, sidebarPx  || 200));
+  const editorPctClamped  = Math.max(20,  Math.min(80,  editorPct  || 50));
+  const previewPct        = 100 - editorPctClamped;
+
+  // Sidebar
+  const sidebarEl = document.getElementById('sidebar');
+  if (!sidebarEl.classList.contains('collapsed')) {
+    sidebarEl.style.width = sidebarPxClamped + 'px';
+  }
+  // Store on the element so toggleSidebar can re-apply when re-opening
+  sidebarEl.dataset.layoutWidth = sidebarPxClamped;
+
+  // Editor / preview panes
+  const leftPane  = document.getElementById('left-pane');
+  const rightPane = document.getElementById('right-pane');
+  if (currentViewMode === 'both') {
+    leftPane.style.flex  = 'none';
+    leftPane.style.width = editorPctClamped + '%';
+    rightPane.style.flex  = 'none';
+    rightPane.style.width = previewPct + '%';
+  }
+
+  // Sync slider UI
+  document.getElementById('layout-slider-sidebar').value    = sidebarPxClamped;
+  document.getElementById('layout-slider-editor').value     = editorPctClamped;
+  document.getElementById('layout-slider-preview').value    = previewPct;
+  document.getElementById('layout-val-sidebar').textContent = sidebarPxClamped;
+  document.getElementById('layout-val-editor').textContent  = editorPctClamped;
+  document.getElementById('layout-val-preview').textContent = previewPct;
+}
+
+function resetLayoutWidths() {
+  applyLayoutWidths(200, 50);
+  saveConfig();
+}
+
+// Enable / disable the whole feature. When disabled, remove all inline widths
+// so the layout reverts to its natural CSS flex state.
+function setLayoutEnabled(on) {
+  layoutEnabled = on;
+  document.getElementById('btn-layout').classList.toggle('active', on);
+  document.getElementById('divider').classList.toggle('locked', on);
+
+  // Sync checkbox state and slider dimming
+  const checkbox    = document.getElementById('layout-enabled-checkbox');
+  const slidersWrap = document.getElementById('layout-sliders');
+  if (checkbox) checkbox.checked = on;
+  if (slidersWrap) {
+    slidersWrap.style.opacity      = on ? '' : '0.35';
+    slidersWrap.style.pointerEvents = on ? '' : 'none';
+  }
+
+  if (!on) {
+    // Strip all custom widths so flex takes over again
+    const sidebarEl = document.getElementById('sidebar');
+    sidebarEl.style.width = '';
+    const leftPane  = document.getElementById('left-pane');
+    const rightPane = document.getElementById('right-pane');
+    leftPane.style.flex  = '';
+    leftPane.style.width = '';
+    rightPane.style.flex  = '';
+    rightPane.style.width = '';
+  } else {
+    // Re-apply saved widths
+    const w = getLayoutWidths();
+    applyLayoutWidths(w.sidebar, w.editorPct);
+  }
+  saveConfig();
+}
+
+// ── Layout panel open/close ─────────────────────────
+(function wireLayoutPanel() {
+  const panel      = document.getElementById('layout-panel');
+  const btnLayout  = document.getElementById('btn-layout');
+  const checkbox   = document.getElementById('layout-enabled-checkbox');
+  const slidersWrap   = document.getElementById('layout-sliders');
+  const sliderSidebar = document.getElementById('layout-slider-sidebar');
+  const sliderEditor  = document.getElementById('layout-slider-editor');
+  const sliderPreview = document.getElementById('layout-slider-preview');
+  const valSidebar    = document.getElementById('layout-val-sidebar');
+  const valEditor     = document.getElementById('layout-val-editor');
+  const valPreview    = document.getElementById('layout-val-preview');
+
+  // Checkbox toggles the feature on/off
+  checkbox.addEventListener('change', () => {
+    setLayoutEnabled(checkbox.checked);
+    slidersWrap.style.opacity     = checkbox.checked ? '' : '0.35';
+    slidersWrap.style.pointerEvents = checkbox.checked ? '' : 'none';
+  });
+
+  // Preview slider is read-only (driven by editor slider)
+  sliderPreview.addEventListener('mousedown', e => e.preventDefault());
+
+  sliderSidebar.addEventListener('input', () => {
+    const v = parseInt(sliderSidebar.value, 10);
+    valSidebar.textContent = v;
+    applyLayoutWidths(v, parseInt(sliderEditor.value, 10));
+    saveConfig();
+  });
+
+  sliderEditor.addEventListener('input', () => {
+    const edPct = parseInt(sliderEditor.value, 10);
+    const prPct = 100 - edPct;
+    valEditor.textContent  = edPct;
+    valPreview.textContent = prPct;
+    sliderPreview.value    = prPct;
+    applyLayoutWidths(parseInt(sliderSidebar.value, 10), edPct);
+    saveConfig();
+  });
+
+  function openPanel() {
+    const rect = btnLayout.getBoundingClientRect();
+    panel.style.left = Math.min(rect.left, window.innerWidth - 250) + 'px';
+    panel.style.top  = (rect.bottom + 4) + 'px';
+    panel.classList.add('open');
+    setTimeout(() => document.addEventListener('mousedown', outsideClick, true), 0);
+  }
+
+  function closePanel() {
+    panel.classList.remove('open');
+    document.removeEventListener('mousedown', outsideClick, true);
+  }
+
+  function outsideClick(e) {
+    if (!panel.contains(e.target) && e.target !== btnLayout) closePanel();
+  }
+
+  // Click = toggle the panel open/close.
+  // The panel contains its own enable/disable toggle.
+  window.toggleLayoutPanel = function() {
+    if (panel.classList.contains('open')) {
+      closePanel();
+    } else {
+      openPanel();
+    }
+  };
+})();
+
+// ═══════════════════════════════════════════════════
 //  View mode (editor / both / preview)
 // ═══════════════════════════════════════════════════
 let currentViewMode = 'both';
@@ -1504,10 +1671,11 @@ function setViewMode(mode) {
 // axis: 'x' for left/right panes, 'y' for top/bottom panels.
 // onMove(delta, startSizes) → called each mousemove with the drag delta
 //   and the panel sizes captured at mousedown.
-function makeDragResizer(splitter, axis, cursor, onMove) {
+function makeDragResizer(splitter, axis, cursor, onMove, isLocked) {
   let dragging = false, startPos = 0, startSizes = [];
 
   splitter.addEventListener('mousedown', e => {
+    if (isLocked && isLocked()) return;
     dragging   = true;
     startPos   = axis === 'x' ? e.clientX : e.clientY;
     startSizes = onMove.captureStart();
@@ -1548,7 +1716,9 @@ function makeDragResizer(splitter, axis, cursor, onMove) {
     rightPane.style.width = (100 - pct) + '%';
   }
   onPaneMove.captureStart = () => [];
-  makeDragResizer(divider, 'x', 'col-resize', onPaneMove);
+  // Manual dragging conflicts with the layout panel's precise slider widths —
+  // while "Custom layout" is on, the divider is locked and dragging is a no-op.
+  makeDragResizer(divider, 'x', 'col-resize', onPaneMove, () => layoutEnabled);
 }
 
 // ── Sidebar TOC splitter drag (top/bottom) ──────────
@@ -1738,6 +1908,8 @@ function saveConfig() {
     viewMode:         currentViewMode,
     activeId:         activeId,
     syncScroll:       syncScrollEnabled,
+    layoutEnabled:    layoutEnabled,
+    layoutWidths:     layoutEnabled ? getLayoutWidths() : undefined,
   };
   localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
 }
@@ -1836,6 +2008,22 @@ clearPreloadClasses();
       syncScrollEnabled = false;
       document.getElementById('btn-sync-scroll').classList.remove('active');
     }
+
+    // layout widths
+    if (cfg.layoutEnabled === false) {
+      setLayoutEnabled(false);
+    } else {
+      // Layout is enabled (explicitly, or by default when config was never
+      // saved / was cleared) — always apply widths so the DOM and the
+      // slider UI agree. Without this, a cleared config left layoutEnabled
+      // true but never called applyLayoutWidths, so editor/preview fell
+      // back to a plain 50/50 flex split that just happened to coincide
+      // with the slider defaults — any previously-set ratio appeared to
+      // "win" purely by flex leftover, not by the layout system.
+      document.getElementById('divider').classList.add('locked');
+      const w = cfg.layoutWidths || { sidebar: 200, editorPct: 50 };
+      applyLayoutWidths(w.sidebar, w.editorPct);
+    }
     // (warning footer: show unless user has explicitly dismissed it)
 
   } catch(e) {}
@@ -1882,8 +2070,8 @@ function closeHkModal() {
 Object.assign(window, {
   closeHkModal, copyRaw, createNote, dismissWarning, downloadMd, exportHtml, exportJson, exportPdf,
   fmt, fmtBlock, fmtLine, insertLink, insertText, loadFile, onFileLoad, openHkModal,
-  resetAllData, setViewMode, tocJump, toggleHighlight, toggleSidebar,
-  toggleToc, toggleWrap, toggleSyncScroll, toggleTag, addFreeTag, removeFreeTag,
+  resetAllData, resetLayoutWidths, setViewMode, tocJump, toggleHighlight, toggleSidebar,
+  toggleToc, toggleWrap, toggleSyncScroll, toggleLayoutPanel, toggleTag, addFreeTag, removeFreeTag,
 });
 
 // ═══════════════════════════════════════════════════

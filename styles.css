@@ -19,7 +19,7 @@
   --radius:    6px;
   --mono:      'JetBrains Mono', 'Fira Code', monospace;
   --sans:      'Inter', system-ui, sans-serif;
-  --sidebar-w: 220px;
+  --sidebar-w: 200px;
 
   /* Override Bootstrap colors to match dark theme */
   --bs-body-bg: var(--bg);
@@ -409,6 +409,12 @@ html, body {
 }
 #divider:hover, #divider.dragging { background: var(--accent); }
 #divider::after { content: ''; position: absolute; inset: 0 -4px; }
+/* Locked while "Custom layout" is enabled — the layout panel's sliders own
+   pane sizing in that mode, so dragging is disabled and the cursor/hover
+   affordance is removed to signal that. */
+#divider.locked { cursor: default; }
+#divider.locked:hover { background: var(--border); }
+#divider.locked::after { cursor: default; }
 
 /* ── Editor wrapper ────────────────────────────── */
 #editor-wrap {
@@ -694,6 +700,117 @@ html, body {
 .view-toggle .btn-toolbar:last-child { border-right: none; }
 .view-toggle .btn-toolbar:hover { opacity: 1; background: var(--border); }
 .view-toggle .btn-toolbar.active { background: var(--accent-dim); color: var(--accent); opacity: 1; border-color: transparent; }
+
+/* ── Layout panel ──────────────────────────────── */
+#layout-panel {
+  position: fixed;
+  z-index: 10000;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px 10px;
+  box-shadow: 0 8px 24px #00000066;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 220px;
+  user-select: none;
+}
+#layout-panel.open { display: flex; }
+
+.layout-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.layout-panel-title {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.layout-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+.layout-toggle-label input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 13px;
+  height: 13px;
+  cursor: pointer;
+}
+.layout-toggle-text {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.layout-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: -2px;
+}
+.layout-label span { color: var(--accent); }
+
+.layout-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  outline: none;
+  cursor: pointer;
+}
+.layout-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.layout-slider::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.layout-slider:disabled { opacity: 0.4; cursor: default; }
+.layout-slider:disabled::-webkit-slider-thumb { cursor: default; }
+.layout-slider:disabled::-moz-range-thumb { cursor: default; }
+
+#layout-reset {
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: color 0.1s, border-color 0.1s, background 0.1s;
+  align-self: flex-end;
+}
+#layout-reset:hover { color: var(--text); border-color: var(--text-muted); background: var(--border); }
 
 /* ── Warning footer ────────────────────────────── */
 #warning-footer {
