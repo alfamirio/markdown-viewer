@@ -1,4 +1,4 @@
-  // ── CodeMirror 6 setup ──────────────────────────────
+// ── CodeMirror 6 setup ──────────────────────────────
   // Builds the editor instance and exposes a small shim on
   // window.editor that mimics the <textarea> API surface the rest of
   // the app (written before this rewrite) was built against —

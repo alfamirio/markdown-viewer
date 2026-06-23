@@ -1745,7 +1745,9 @@ function saveConfig() {
 }
 
 function dismissWarning() {
-  document.getElementById('warning-footer').style.display = 'none';
+  const el = document.getElementById('warning-footer');
+  el.classList.add('d-none');
+  el.classList.remove('d-flex');
   localStorage.setItem('md_warning_dismissed', '1');
   saveConfig();
 }
@@ -1842,7 +1844,9 @@ function loadConfig() {
 
   // Show warning footer unless user has previously dismissed it
   if (!localStorage.getItem('md_warning_dismissed')) {
-    document.getElementById('warning-footer').style.display = 'flex';
+    const wf = document.getElementById('warning-footer');
+    wf.classList.remove('d-none');
+    wf.classList.add('d-flex');
   }
 
   // After a reset, clear the temporary flag (footer visibility already handled above)
@@ -1855,11 +1859,15 @@ function loadConfig() {
 //  Hotkeys modal
 // ═══════════════════════════════════════════════════
 function openHkModal() {
-  document.getElementById('hk-overlay').classList.add('open');
-  document.getElementById('hk-close').focus();
+  const el = document.getElementById('hk-overlay');
+  const modal = bootstrap.Modal.getOrCreateInstance(el);
+  modal.show();
+  setTimeout(() => document.getElementById('hk-close').focus(), 200);
 }
 function closeHkModal() {
-  document.getElementById('hk-overlay').classList.remove('open');
+  const el = document.getElementById('hk-overlay');
+  const modal = bootstrap.Modal.getInstance(el);
+  if (modal) modal.hide();
 }
 
 // ═══════════════════════════════════════════════════

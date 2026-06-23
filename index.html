@@ -7,128 +7,116 @@
 
   <script>
     try {
-      // Reemplaza 'md_config' por el valor real de tu CONFIG_KEY si es distinto
       const cfg = JSON.parse(localStorage.getItem('md_config') || '{}');
-      
-        // Bloqueo del sidebar
-        if (cfg.sidebar === false) {
-          document.documentElement.classList.add('preload-sidebar-collapsed');
-        }
-        
-        // Bloqueo del modo de visualización (editor / preview)
-        if (cfg.viewMode === 'editor') {
-          document.documentElement.classList.add('preload-view-editor');
-        } else if (cfg.viewMode === 'preview') {
-          document.documentElement.classList.add('preload-view-preview');
-        }
-
+      if (cfg.sidebar === false)      document.documentElement.classList.add('preload-sidebar-collapsed');
+      if (cfg.viewMode === 'editor')  document.documentElement.classList.add('preload-view-editor');
+      else if (cfg.viewMode === 'preview') document.documentElement.classList.add('preload-view-preview');
     } catch (e) {}
   </script>
 
+  <!-- Bootstrap 5 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-<div id="app">
+<div id="app" class="d-flex flex-column" style="height:100vh">
 
   <!-- ── Toolbar ── -->
-  <div id="toolbar">
+  <div id="toolbar" class="flex-shrink-0 user-select-none">
 
     <!-- Row 1: Viewer controls -->
-    <div class="toolbar-row">
-      <span class="toolbar-brand">// md viewer</span>
+    <div class="toolbar-row d-flex align-items-center gap-1 px-3 py-1 overflow-x-auto">
+      <span class="toolbar-brand me-1">// md viewer</span>
       <div class="toolbar-sep"></div>
-      
-      <button class="btn" data-tip="Import .md, .txt or .json file" onclick="loadFile()">↑ import</button>
-      <input type="file" id="file-input" accept=".md,.markdown,.txt,.json" style="display:none" onchange="onFileLoad(event)" />
+
+      <button class="btn btn-toolbar" data-tip="Import .md, .txt or .json file" onclick="loadFile()">↑ import</button>
+      <input type="file" id="file-input" accept=".md,.markdown,.txt,.json" class="d-none" onchange="onFileLoad(event)" />
       <div class="toolbar-sep"></div>
-      <button class="btn" data-tip="Download .md"          onclick="downloadMd()">↓ .md</button>
-      <button class="btn" id="btn-pdf" data-tip="Export PDF" onclick="exportPdf()">↓ .pdf</button>
-      <button class="btn" data-tip="Export standalone HTML" onclick="exportHtml()">↓ .html</button>
-      <button class="btn" data-tip="Export all notes as JSON" onclick="exportJson()">↓ .json</button>
+      <button class="btn btn-toolbar" data-tip="Download .md"           onclick="downloadMd()">↓ .md</button>
+      <button class="btn btn-toolbar" id="btn-pdf" data-tip="Export PDF" onclick="exportPdf()">↓ .pdf</button>
+      <button class="btn btn-toolbar" data-tip="Export standalone HTML"  onclick="exportHtml()">↓ .html</button>
+      <button class="btn btn-toolbar" data-tip="Export all notes as JSON" onclick="exportJson()">↓ .json</button>
       <div class="toolbar-sep"></div>
-      <button class="btn" id="btn-copy" data-tip="Copy raw markdown"     onclick="copyRaw()">⎘ copy</button>
+      <button class="btn btn-toolbar" id="btn-copy" data-tip="Copy raw markdown" onclick="copyRaw()">⎘ copy</button>
 
       <div class="toolbar-sep"></div>
 
       <!-- View mode toggle -->
-      <div class="view-toggle" id="view-toggle">
-        <button class="btn" id="btn-view-editor"  data-tip="Editor only  Alt+1"   onclick="setViewMode('editor')">editor</button>
-        <button class="btn active" id="btn-view-both"    data-tip="Editor + Preview  Alt+2" onclick="setViewMode('both')">both</button>
-        <button class="btn" id="btn-view-preview" data-tip="Preview only  Alt+3"  onclick="setViewMode('preview')">preview</button>
+      <div class="view-toggle d-flex align-items-center" id="view-toggle">
+        <button class="btn btn-toolbar" id="btn-view-editor"  data-tip="Editor only  Alt+1"   onclick="setViewMode('editor')">editor</button>
+        <button class="btn btn-toolbar active" id="btn-view-both" data-tip="Editor + Preview  Alt+2" onclick="setViewMode('both')">both</button>
+        <button class="btn btn-toolbar" id="btn-view-preview" data-tip="Preview only  Alt+3"  onclick="setViewMode('preview')">preview</button>
       </div>
 
       <div class="toolbar-sep"></div>
 
-      <button class="btn btn-icon active" id="btn-sidebar" data-tip="Toggle notes panel" onclick="toggleSidebar()">☰</button>
-      <button class="btn btn-icon active" id="btn-toc-toolbar" data-tip="Toggle table of contents" onclick="toggleToc()">§</button>
+      <button class="btn btn-toolbar btn-icon active" id="btn-sidebar"     data-tip="Toggle notes panel"          onclick="toggleSidebar()">☰</button>
+      <button class="btn btn-toolbar btn-icon active" id="btn-toc-toolbar" data-tip="Toggle table of contents"    onclick="toggleToc()">§</button>
 
       <div class="toolbar-sep"></div>
 
-      <button class="btn" id="btn-wrap" data-tip="Toggle word wrap" onclick="toggleWrap()">wrap</button>
-      <button class="btn active" id="btn-highlight" data-tip="Toggle syntax highlighting" onclick="toggleHighlight()">highlight</button>
-      <button class="btn active" id="btn-sync-scroll" data-tip="Link/unlink scroll between editor and preview" onclick="toggleSyncScroll()">⇅ sync</button>
+      <button class="btn btn-toolbar" id="btn-wrap"        data-tip="Toggle word wrap"                              onclick="toggleWrap()">wrap</button>
+      <button class="btn btn-toolbar active" id="btn-highlight"  data-tip="Toggle syntax highlighting"              onclick="toggleHighlight()">highlight</button>
+      <button class="btn btn-toolbar active" id="btn-sync-scroll" data-tip="Link/unlink scroll between editor and preview" onclick="toggleSyncScroll()">⇅ sync</button>
 
       <div class="toolbar-sep"></div>
 
-
-      <div id="status">
-        <button class="btn" data-tip="Keyboard shortcuts ?" onclick="openHkModal()" style="padding: 0; margin-right: 2px;">? keys</button>
+      <div id="status" class="d-flex align-items-center gap-2 ms-auto text-nowrap">
+        <button class="btn btn-toolbar p-0 me-1" data-tip="Keyboard shortcuts ?" onclick="openHkModal()">? keys</button>
         <span class="stat-sep">·</span>
-
         <span id="storage-count" class="stat">0% (0 KB)</span>
         <span class="stat-sep">·</span>
         <span id="word-count" class="stat">0 words</span>
         <span class="stat-sep">·</span>
         <span id="line-count" class="stat">0 lines</span>
-
+        <p id="local-storage-indicator" class="badge bg-warning text-dark mb-0">Local storage</p>
         <span id="save-indicator" class="saved">● saved</span>
         <button id="btn-reset-all" data-tip="Delete all notes & reset app" onclick="resetAllData()">🗑</button>
       </div>
     </div>
 
     <!-- Row 2: Markdown formatting -->
-    <div class="toolbar-row">
+    <div class="toolbar-row d-flex align-items-center gap-1 px-3 py-1 overflow-x-auto border-top border-divider">
 
-      <button class="btn" data-tip="Code block"     onclick="fmtBlock()">``` block</button>
-      <button class="btn" data-tip="Blockquote"     onclick="fmtLine('> ')">&gt; bq</button>
-      <button class="btn" data-tip="Horizontal rule" onclick="insertText('\n---\n')">— hr</button>
-      <button class="btn" data-tip="Link"            onclick="insertLink()">🔗 link</button>
-      <button class="btn" data-tip="Unordered list" onclick="fmtLine('- ')">— ul</button>
-      <button class="btn" data-tip="Ordered list"   onclick="fmtLine('1. ')">1. ol</button>
-
-      <div class="toolbar-sep"></div>
-
-      <button class="btn" id="btn-table" data-tip="Insert table">⊞ table</button>
+      <button class="btn btn-toolbar" data-tip="Code block"      onclick="fmtBlock()">``` block</button>
+      <button class="btn btn-toolbar" data-tip="Blockquote"      onclick="fmtLine('> ')">&gt; bq</button>
+      <button class="btn btn-toolbar" data-tip="Horizontal rule" onclick="insertText('\n---\n')">— hr</button>
+      <button class="btn btn-toolbar" data-tip="Link"            onclick="insertLink()">🔗 link</button>
+      <button class="btn btn-toolbar" data-tip="Unordered list"  onclick="fmtLine('- ')">— ul</button>
+      <button class="btn btn-toolbar" data-tip="Ordered list"    onclick="fmtLine('1. ')">1. ol</button>
 
       <div class="toolbar-sep"></div>
 
-      <button class="btn btn-icon" data-tip="Bold  Ctrl+B"        onclick="fmt('**','**')"><b>B</b></button>
-      <button class="btn btn-icon" data-tip="Italic  Ctrl+I"      onclick="fmt('_','_')"><i>I</i></button>
-      <button class="btn btn-icon" data-tip="Strikethrough"        onclick="fmt('~~','~~')" style="text-decoration:line-through">S</button>
-      <button class="btn btn-icon" data-tip="Inline code  Ctrl+`" onclick="fmt('`','`')" style="font-size:11px">{ }</button>
+      <button class="btn btn-toolbar" id="btn-table" data-tip="Insert table">⊞ table</button>
 
       <div class="toolbar-sep"></div>
 
-      <button class="btn" data-tip="Heading 1" onclick="fmtLine('# ')">H1</button>
-      <button class="btn" data-tip="Heading 2" onclick="fmtLine('## ')">H2</button>
-      <button class="btn" data-tip="Heading 3" onclick="fmtLine('### ')">H3</button>
+      <button class="btn btn-toolbar btn-icon" data-tip="Bold  Ctrl+B"        onclick="fmt('**','**')"><b>B</b></button>
+      <button class="btn btn-toolbar btn-icon" data-tip="Italic  Ctrl+I"      onclick="fmt('_','_')"><i>I</i></button>
+      <button class="btn btn-toolbar btn-icon" data-tip="Strikethrough"        onclick="fmt('~~','~~')" style="text-decoration:line-through">S</button>
+      <button class="btn btn-toolbar btn-icon" data-tip="Inline code  Ctrl+`" onclick="fmt('`','`')" style="font-size:11px">{ }</button>
+
+      <div class="toolbar-sep"></div>
+
+      <button class="btn btn-toolbar" data-tip="Heading 1" onclick="fmtLine('# ')">H1</button>
+      <button class="btn btn-toolbar" data-tip="Heading 2" onclick="fmtLine('## ')">H2</button>
+      <button class="btn btn-toolbar" data-tip="Heading 3" onclick="fmtLine('### ')">H3</button>
 
       <div class="toolbar-sep"></div>
 
       <span class="toolbar-tags-label">tags:</span>
-      <button class="btn tag-btn" id="tag-btn-fav" data-tip="Toggle 'fav' tag" onclick="toggleTag('fav')">⚑ fav</button>
-      <button class="btn tag-btn" id="tag-btn-todo"      data-tip="Toggle 'todo' tag"      onclick="toggleTag('todo')">☑ todo</button>
-      <button class="btn tag-btn" id="tag-btn-draft"     data-tip="Toggle 'draft' tag"     onclick="toggleTag('draft')">✎ draft</button>
-      <button class="btn tag-btn" id="tag-btn-bug"       data-tip="Toggle 'bug' tag"       onclick="toggleTag('bug')">🐛 bug</button>
+      <button class="btn btn-toolbar tag-btn" id="tag-btn-fav"   data-tip="Toggle 'fav' tag"   onclick="toggleTag('fav')">⚑ fav</button>
+      <button class="btn btn-toolbar tag-btn" id="tag-btn-todo"  data-tip="Toggle 'todo' tag"  onclick="toggleTag('todo')">☑ todo</button>
+      <button class="btn btn-toolbar tag-btn" id="tag-btn-draft" data-tip="Toggle 'draft' tag" onclick="toggleTag('draft')">✎ draft</button>
+      <button class="btn btn-toolbar tag-btn" id="tag-btn-bug"   data-tip="Toggle 'bug' tag"   onclick="toggleTag('bug')">🐛 bug</button>
 
       <div id="tag-input-wrap" data-tip="Add a custom tag — Enter or comma to confirm">
         <div id="tag-chips"></div>
         <input id="tag-input" type="text" placeholder="+ tag" spellcheck="false" autocomplete="off" />
       </div>
-
     </div>
 
-  </div>
+  </div><!-- /toolbar -->
 
   <!-- Table picker popup -->
   <div id="table-picker">
@@ -137,13 +125,13 @@
   </div>
 
   <!-- ── Body row ── -->
-  <div id="body-row">
+  <div id="body-row" class="d-flex flex-grow-1 overflow-hidden">
 
     <!-- ── Notes sidebar ── -->
-    <div id="sidebar">
-      <div id="sidebar-header">
+    <div id="sidebar" class="d-flex flex-column flex-shrink-0">
+      <div id="sidebar-header" class="d-flex align-items-center justify-content-between px-3 py-2 flex-shrink-0 border-bottom border-divider">
         <span>Notes</span>
-        <div class="sidebar-header-btns">
+        <div class="sidebar-header-btns d-flex align-items-center gap-1">
           <button id="btn-new-note"          data-tip="New empty note">+</button>
           <button id="btn-new-note-template" data-tip="New note from template">★</button>
         </div>
@@ -154,7 +142,7 @@
 
       <!-- TOC panel -->
       <div id="toc-panel">
-        <div id="toc-header">
+        <div id="toc-header" class="d-flex align-items-center justify-content-between px-3 py-2 flex-shrink-0 border-bottom border-divider">
           <span>Contents</span>
           <button id="btn-toc-toggle" data-tip="Toggle table of contents" onclick="toggleToc()">×</button>
         </div>
@@ -163,34 +151,35 @@
     </div>
 
     <!-- ── Editor area ── -->
-    <div id="editor-area">
+    <div id="editor-area" class="d-flex flex-column flex-grow-1 overflow-hidden">
 
       <!-- Side-by-side panes -->
-      <div id="panes">
-        <div class="pane" id="left-pane">
-          <div id="editor-wrap">
+      <div id="panes" class="d-flex flex-grow-1 overflow-hidden">
+        <div class="pane d-flex flex-column flex-grow-1 overflow-hidden" id="left-pane">
+          <div id="editor-wrap" class="flex-grow-1 d-flex overflow-hidden">
             <div id="cm-host" class="wrap"></div>
           </div>
         </div>
 
         <div id="divider"></div>
 
-        <div class="pane" id="right-pane">
+        <div class="pane d-flex flex-column flex-grow-1 overflow-hidden" id="right-pane">
           <div id="preview" class="wrap"></div>
         </div>
       </div>
 
     </div><!-- /editor-area -->
   </div><!-- /body-row -->
+
   <!-- ── Warning footer ── -->
-  <div id="warning-footer" style="display:none">
+  <div id="warning-footer" class="d-none d-flex align-items-center gap-2 px-3 py-1 flex-shrink-0 border-top border-divider">
     <span class="warn-icon">⚠</span>
-    <span class="warn-text">
+    <span class="warn-text flex-grow-1">
       <strong>localStorage only</strong> — Notes are saved in your browser's localStorage and will be lost if you clear site data.
       <strong>Export regularly</strong> using ↓&nbsp;.md.
       This tool is provided <strong>as-is, with no warranty</strong> of any kind — not for production use.
     </span>
-    <button id="btn-warn-dismiss" onclick="dismissWarning()" data-tip="Dismiss warning">×</button>
+    <button id="btn-warn-dismiss" class="btn btn-sm" onclick="dismissWarning()" data-tip="Dismiss warning">×</button>
   </div>
 
 </div><!-- /app -->
@@ -204,15 +193,16 @@
 <!-- PDF export progress toast -->
 <div id="pdf-progress"><span class="spin"></span><span id="pdf-progress-text">Rendering PDF…</span></div>
 
-
 <!-- marked -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
-
 <!-- Mermaid diagrams -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.0/mermaid.min.js"></script>
 <!-- html2canvas + jsPDF for true PDF export -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<!-- Bootstrap JS (for modal, dropdown, etc.) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
 
 <!-- ── CodeMirror 6 (ESM via esm.sh) ──────────────────── -->
 <script type="importmap">
@@ -230,73 +220,80 @@
 </script>
 
 <script type="module" src="cm-editor.js"></script>
-
 <script src="app.js"></script>
 
 
-<!-- ── Hotkeys modal ── -->
-<div id="hk-overlay" onclick="if(event.target===this)closeHkModal()">
-  <div id="hk-modal" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
-    <div id="hk-header">
-      <h2>⌨ Keyboard <span>shortcuts</span></h2>
-      <button id="hk-close" onclick="closeHkModal()" data-tip="Close  Esc">×</button>
-    </div>
-    <div id="hk-body">
+<!-- ── Hotkeys modal (Bootstrap modal) ── -->
+<div class="modal fade" id="hk-overlay" tabindex="-1" aria-label="Keyboard shortcuts" aria-modal="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content hk-modal-content" id="hk-modal">
 
-      <div class="hk-section-title">Formatting</div>
-      <div class="hk-grid">
-        <div class="hk-row"><span class="hk-desc">Bold</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>B</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Italic</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>I</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Delete line</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>D</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Inline code</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>`</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Heading 1</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>1</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Heading 2</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>2</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Heading 3</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>3</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Blockquote</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Q</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Code block</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>K</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Unordered list</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>U</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Ordered list</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>O</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Insert link</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>K</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Horizontal rule</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>H</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Indent (Tab)</span><span class="hk-keys"><kbd>Tab</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Outdent</span><span class="hk-keys"><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>Tab</kbd></span></div>
+      <div class="modal-header hk-header" id="hk-header">
+        <h5 class="modal-title hk-title">⌨ Keyboard <span>shortcuts</span></h5>
+        <button type="button" class="btn-close btn-close-white" id="hk-close" onclick="closeHkModal()" data-tip="Close  Esc" aria-label="Close"></button>
       </div>
 
-      <div class="hk-section-title">File & editor</div>
-      <div class="hk-grid">
-        <div class="hk-row"><span class="hk-desc">Save now</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>S</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Download .md</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>S</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Export PDF</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>P</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Export HTML</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>H</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Toggle word wrap</span><span class="hk-keys"><kbd>Alt</kbd><span class="hk-plus">+</span><kbd>Z</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Focus editor</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>E</kbd></span></div>
+      <div class="modal-body" id="hk-body">
+
+        <div class="hk-section-title">Formatting</div>
+        <div class="hk-grid row row-cols-2 g-0">
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Bold</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>B</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Italic</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>I</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Delete line</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>D</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Inline code</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>`</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Heading 1</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>1</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Heading 2</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>2</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Heading 3</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>3</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Blockquote</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Q</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Code block</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>K</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Unordered list</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>U</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Ordered list</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>O</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Insert link</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>K</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Horizontal rule</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>H</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Indent (Tab)</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Tab</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Outdent</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>Tab</kbd></span></div>
+        </div>
+
+        <div class="hk-section-title">File & editor</div>
+        <div class="hk-grid row row-cols-2 g-0">
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Save now</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>S</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Download .md</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>S</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Export PDF</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>P</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Export HTML</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>H</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Toggle word wrap</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Alt</kbd><span class="hk-plus">+</span><kbd>Z</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Focus editor</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>E</kbd></span></div>
+        </div>
+
+        <div class="hk-section-title">Layout</div>
+        <div class="hk-grid row row-cols-2 g-0">
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Editor only</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Alt</kbd><span class="hk-plus">+</span><kbd>1</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Editor + Preview</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Alt</kbd><span class="hk-plus">+</span><kbd>2</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Preview only</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Alt</kbd><span class="hk-plus">+</span><kbd>3</kbd></span></div>
+        </div>
+
+        <div class="hk-section-title">Notes</div>
+        <div class="hk-grid row row-cols-2 g-0">
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">New note</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Alt</kbd><span class="hk-plus">+</span><kbd>N</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Toggle sidebar</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>\</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Next note</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>]</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Previous note</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>[</kbd></span></div>
+        </div>
+
+        <div class="hk-section-title">General</div>
+        <div class="hk-grid row row-cols-2 g-0">
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Show this dialog</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>?</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Close dialog</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Esc</kbd></span></div>
+        </div>
+
+      </div><!-- /modal-body -->
+
+      <div class="modal-footer hk-footer" id="hk-footer">
+        Press <kbd>?</kbd> anytime to open · <kbd>Esc</kbd> to close · Mac users: <kbd>⌘</kbd> instead of <kbd>Ctrl</kbd>
       </div>
 
-      <div class="hk-section-title">Layout</div>
-      <div class="hk-grid">
-        <div class="hk-row"><span class="hk-desc">Editor only</span><span class="hk-keys"><kbd>Alt</kbd><span class="hk-plus">+</span><kbd>1</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Editor + Preview</span><span class="hk-keys"><kbd>Alt</kbd><span class="hk-plus">+</span><kbd>2</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Preview only</span><span class="hk-keys"><kbd>Alt</kbd><span class="hk-plus">+</span><kbd>3</kbd></span></div>
-      </div>
-
-      <div class="hk-section-title">Notes</div>
-      <div class="hk-grid">
-        <div class="hk-row"><span class="hk-desc">New note</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Alt</kbd><span class="hk-plus">+</span><kbd>N</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Toggle sidebar</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>\</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Next note</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>]</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Previous note</span><span class="hk-keys"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>[</kbd></span></div>
-      </div>
-
-      <div class="hk-section-title">General</div>
-      <div class="hk-grid">
-        <div class="hk-row"><span class="hk-desc">Show this dialog</span><span class="hk-keys"><kbd>?</kbd></span></div>
-        <div class="hk-row"><span class="hk-desc">Close dialog</span><span class="hk-keys"><kbd>Esc</kbd></span></div>
-      </div>
-
-    </div>
-    <div id="hk-footer">Press <kbd>?</kbd> anytime to open · <kbd>Esc</kbd> to close · Mac users: <kbd>⌘</kbd> instead of <kbd>Ctrl</kbd></div>
-  </div>
-</div>
+    </div><!-- /modal-content -->
+  </div><!-- /modal-dialog -->
+</div><!-- /modal -->
 
 </body>
 </html>
