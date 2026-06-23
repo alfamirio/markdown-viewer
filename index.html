@@ -955,6 +955,20 @@
     }
     #warning-footer .warn-text a:hover { color: #f0c000; }
 
+    #btn-warn-dismiss {
+      background: transparent;
+      border: 1px solid #3d2e0088;
+      color: #a07800;
+      font-size: 16px;
+      line-height: 1;
+      padding: 1px 7px;
+      border-radius: 4px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.1s, color 0.1s;
+    }
+    #btn-warn-dismiss:hover { background: #3d2e00; color: #f0c000; }
+
 
     @media print {
       #warning-footer { display: none !important; }
@@ -1091,6 +1105,7 @@
       <strong>Export regularly</strong> using ↓&nbsp;.md.
       This tool is provided <strong>as-is, with no warranty</strong> of any kind — not for production use.
     </span>
+    <button id="btn-warn-dismiss" onclick="dismissWarning()" title="Dismiss">×</button>
   </div>
 
 </div><!-- /app -->
@@ -1117,6 +1132,7 @@
 //  Constants & element refs
 // ═══════════════════════════════════════════════════
 const NOTES_INDEX_KEY = 'md_notes_index';   // JSON array of {id, name}
+const CONFIG_KEY      = 'md_config';         // UI state: wrap, highlight, sidebar, toc, viewMode
 const noteContent     = id => 'md_note_' + id;
 
 const editor       = document.getElementById('editor');
@@ -1285,6 +1301,7 @@ function toggleSidebar() {
   btnSidebar.classList.toggle('active');
   mirrorMetricsDirty = true;
   setTimeout(() => { mirrorMetricsDirty = true; if (wrapOn) updateLineNumbers(); }, 200);
+  saveConfig();
 }
 
 // ═══════════════════════════════════════════════════
@@ -1836,6 +1853,7 @@ function toggleWrap() {
   btnWrap.classList.toggle('active', wrapOn);
   mirrorMetricsDirty = true;
   updateLineNumbers();
+  saveConfig();
 }
 
 // ═══════════════════════════════════════════════════
@@ -1855,6 +1873,7 @@ function toggleHighlight() {
     editor.style.color = 'var(--text)';
     editor.style.caretColor = 'var(--text)';
   }
+  saveConfig();
 }
 
 // ═══════════════════════════════════════════════════
@@ -1892,12 +1911,12 @@ async function mermaidToDataURL(code, id) {
   return new Promise(resolve => {
     const img = new Image();
     img.onload = () => {
-      const sc = 2, cv = document.createElement('canvas');
+      const sc = 2.5, cv = document.createElement('canvas');
       cv.width = w * sc; cv.height = h * sc;
       const ctx = cv.getContext('2d');
       ctx.fillStyle = '#fff'; ctx.fillRect(0,0,cv.width,cv.height);
       ctx.drawImage(img, 0, 0, cv.width, cv.height);
-      resolve({ dataURL: cv.toDataURL('image/png'), w, h });
+      resolve({ dataURL: cv.toDataURL('image/jpeg', 0.7), w, h });
     };
     img.onerror = () => resolve(null);
     img.src = svgStr;
@@ -1968,7 +1987,7 @@ async function exportPdf() {
       if (imgW > maxW) { imgH = imgH * maxW / imgW; imgW = maxW; }
       if (imgH > maxH) { imgW = imgW * maxH / imgH; imgH = maxH; }
       newPageIfNeeded(imgH + 12);
-      pdf.addImage(dataURL, 'PNG', ML + (CW - imgW) / 2, y, imgW, imgH);
+      pdf.addImage(dataURL, 'JPEG', ML + (CW - imgW) / 2, y, imgW, imgH);
       y += imgH + 12;
     }
 
@@ -2181,6 +2200,7 @@ function toggleToc() {
   btn.textContent = tocVisible ? '×' : '§';
   btn.classList.toggle('active', !tocVisible);
   btnTb.classList.toggle('active', tocVisible);
+  saveConfig();
 }
 
 function updateToc() {
@@ -2324,10 +2344,8 @@ function setViewMode(mode) {
 
   mirrorMetricsDirty = true;
   if (wrapOn) updateLineNumbers();
+  saveConfig();
 }
-
-// ═══════════════════════════════════════════════════
-//  Drag-to-resize panes
 // ═══════════════════════════════════════════════════
 const divider  = document.getElementById('divider');
 const leftPane = document.getElementById('left-pane');
@@ -2480,15 +2498,32 @@ flowchart LR
 // ═══════════════════════════════════════════════════
 function resetAllData() {
   if (!confirm('Delete ALL notes and reset the app to a fresh state?\n\nThis cannot be undone.')) return;
-  // Remove notes index
   localStorage.removeItem(NOTES_INDEX_KEY);
-  // Remove all note content entries
+  localStorage.removeItem(CONFIG_KEY);
   Object.keys(localStorage)
     .filter(k => k.startsWith('md_note_') || k.startsWith('md_editor_'))
     .forEach(k => localStorage.removeItem(k));
-  // Remove any other app config keys
-  ['md_sidebar_open', 'md_toc_open', 'md_view_mode', 'md_wrap'].forEach(k => localStorage.removeItem(k));
   location.reload();
+}
+
+// ═══════════════════════════════════════════════════
+//  Config persistence
+// ═══════════════════════════════════════════════════
+function saveConfig() {
+  const cfg = {
+    wrap:             wrapOn,
+    highlight:        hlOn,
+    sidebar:          !document.getElementById('sidebar').classList.contains('collapsed'),
+    toc:              tocVisible,
+    viewMode:         currentViewMode,
+    warnDismissed:    document.getElementById('warning-footer').style.display === 'none',
+  };
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
+}
+
+function dismissWarning() {
+  document.getElementById('warning-footer').style.display = 'none';
+  saveConfig();
 }
 
 // ═══════════════════════════════════════════════════
@@ -2524,7 +2559,47 @@ function resetAllData() {
 
   renderSidebar();
   switchNote(notes[0].id);
-  btnWrap.classList.add('active');
+
+  // Restore saved config
+  try {
+    const cfg = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
+
+    // wrap
+    wrapOn = cfg.wrap !== false;
+    editor.className  = wrapOn ? 'wrap' : 'no-wrap';
+    preview.className = wrapOn ? 'wrap' : 'no-wrap';
+    btnWrap.classList.toggle('active', wrapOn);
+
+    // highlight
+    hlOn = cfg.highlight !== false;
+    btnHighlight.classList.toggle('active', hlOn);
+    if (!hlOn) {
+      hlDiv.style.visibility = 'hidden';
+      editor.style.color = 'var(--text)';
+      editor.style.caretColor = 'var(--text)';
+    }
+
+    // sidebar
+    if (cfg.sidebar === false) {
+      document.getElementById('sidebar').classList.add('collapsed');
+      btnSidebar.classList.remove('active');
+    }
+
+    // toc
+    if (cfg.toc === false && tocVisible) {
+      toggleToc();
+    }
+
+    // view mode
+    if (cfg.viewMode && cfg.viewMode !== 'both') {
+      setViewMode(cfg.viewMode);
+    }
+    // warning banner
+    if (cfg.warnDismissed) {
+      document.getElementById('warning-footer').style.display = 'none';
+    }
+
+  } catch(e) {}
 })();
 
 // Keep the gutter's wrapped-row measurements correct when the window
