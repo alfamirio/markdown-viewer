@@ -953,41 +953,46 @@ function exportJson() {
   );
 }
 
-function importJson() {
-  document.getElementById('json-file-input').value = '';
-  document.getElementById('json-file-input').click();
+function loadFile() {
+  document.getElementById('file-input').value = '';
+  document.getElementById('file-input').click();
 }
 
-function onJsonFileLoad(e) {
+function onFileLoad(e) {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = ev => {
-    let payload;
-    try {
-      payload = JSON.parse(ev.target.result);
-    } catch(err) {
-      alert('Invalid JSON file — could not parse.');
-      return;
+    if (file.name.toLowerCase().endsWith('.json')) {
+      let payload;
+      try {
+        payload = JSON.parse(ev.target.result);
+      } catch(err) {
+        alert('Invalid JSON file — could not parse.');
+        return;
+      }
+      if (!Array.isArray(payload.notes) || payload.notes.length === 0) {
+        alert('No notes found in this JSON file.');
+        return;
+      }
+      const count = payload.notes.length;
+      if (!confirm(`Import ${count} note${count !== 1 ? 's' : ''}? They will be added to your existing notes.`)) return;
+      if (activeId) saveContent(activeId, editor.value);
+      let firstImportedId = null;
+      payload.notes.forEach(n => {
+        if (typeof n.name !== 'string' || typeof n.content !== 'string') return;
+        const id = genId();
+        notes.push({ id, name: n.name || 'Untitled', createdAt: n.createdAt ?? new Date().toISOString() });
+        saveContent(id, n.content);
+        if (!firstImportedId) firstImportedId = id;
+      });
+      saveIndex();
+      if (firstImportedId) switchNote(firstImportedId);
+      renderSidebar();
+    } else {
+      const name = file.name.replace(/\.(md|markdown|txt)$/i, '') || 'Imported';
+      createNote(name, ev.target.result);
     }
-    if (!Array.isArray(payload.notes) || payload.notes.length === 0) {
-      alert('No notes found in this JSON file.');
-      return;
-    }
-    const count = payload.notes.length;
-    if (!confirm(`Import ${count} note${count !== 1 ? 's' : ''}? They will be added to your existing notes.`)) return;
-    if (activeId) saveContent(activeId, editor.value);
-    let firstImportedId = null;
-    payload.notes.forEach(n => {
-      if (typeof n.name !== 'string' || typeof n.content !== 'string') return;
-      const id = genId();
-      notes.push({ id, name: n.name || 'Untitled', createdAt: n.createdAt ?? new Date().toISOString() });
-      saveContent(id, n.content);
-      if (!firstImportedId) firstImportedId = id;
-    });
-    saveIndex();
-    if (firstImportedId) switchNote(firstImportedId);
-    renderSidebar();
   };
   reader.readAsText(file);
 }
@@ -1149,21 +1154,7 @@ downloadBlob(
 // ═══════════════════════════════════════════════════
 //  Load .md file
 // ═══════════════════════════════════════════════════
-function loadMd() {
-  document.getElementById('md-file-input').value = '';
-  document.getElementById('md-file-input').click();
-}
-
-function onMdFileLoad(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    const name = file.name.replace(/\.(md|markdown|txt)$/i, '') || 'Imported';
-    createNote(name, ev.target.result);
-  };
-  reader.readAsText(file);
-}
+// loadFile / onFileLoad handle .md, .txt and .json — see above.
 
 // ═══════════════════════════════════════════════════
 //  Table of Contents
@@ -1710,9 +1701,9 @@ function closeHkModal() {
 // ═══════════════════════════════════════════════════
 Object.assign(window, {
   closeHkModal, copyRaw, createNote, dismissWarning, downloadMd, exportHtml, exportJson, exportPdf,
-  fmt, fmtBlock, fmtLine, importJson, insertLink, insertText, loadMd, onJsonFileLoad, openHkModal,
+  fmt, fmtBlock, fmtLine, insertLink, insertText, loadFile, onFileLoad, openHkModal,
   resetAllData, setViewMode, tocJump, toggleHighlight, toggleSidebar,
-  toggleToc, toggleWrap, toggleSyncScroll, onMdFileLoad,
+  toggleToc, toggleWrap, toggleSyncScroll,
 });
 
 // ═══════════════════════════════════════════════════
