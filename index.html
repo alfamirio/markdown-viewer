@@ -365,10 +365,45 @@
     }
 
     /* ── Editor textarea ──────────────────────────────── */
-    #editor {
+    /* The textarea sits on top of the highlight overlay.
+       It must be transparent so the coloured div shows through. */
+    #editor-wrap { position: relative; }
+
+    #editor-text-wrap {
       flex: 1;
-      background: var(--bg);
-      color: var(--text);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+    }
+
+    #editor-highlight {
+      position: absolute;
+      top: 0; left: 0;
+      right: 0; bottom: 0;
+      pointer-events: none;
+      overflow: hidden;        /* scrolled in sync via JS */
+      font-family: var(--mono);
+      font-size: 13.5px;
+      line-height: 1.7;
+      padding: 20px 12px 20px 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      tab-size: 2;
+      color: transparent;      /* base text invisible — spans add colour */
+      background: transparent;
+      box-sizing: border-box;
+      z-index: 0;
+    }
+
+    #editor {
+      position: relative;
+      z-index: 1;
+      flex: 1;
+      min-width: 0;
+      background: transparent;  /* show highlight layer beneath */
+      color: transparent;        /* hide plain text — highlight layer shows it */
+      caret-color: var(--text);  /* cursor stays visible */
       font-family: var(--mono);
       font-size: 13.5px;
       line-height: 1.7;
@@ -380,11 +415,31 @@
       tab-size: 2;
       scrollbar-width: thin;
       scrollbar-color: var(--divider) transparent;
-      caret-color: var(--accent);
     }
     #editor::selection { background: var(--accent-dim); }
     #editor::-webkit-scrollbar { width: 7px; }
     #editor::-webkit-scrollbar-thumb { background: var(--divider); border-radius: 4px; }
+
+    /* ── Markdown syntax colours ──────────────────────── */
+    .md-h1         { color: #ff7b72; font-weight: 700; font-size: 1.18em; }
+    .md-h2         { color: #ffa657; font-weight: 700; font-size: 1.1em; }
+    .md-h3         { color: #f0c93a; font-weight: 600; }
+    .md-h4         { color: #7ee787; font-weight: 600; }
+    .md-h5         { color: #79c0ff; font-weight: 600; }
+    .md-h6         { color: #bc8cff; font-weight: 600; }
+    .md-bold       { color: #ffffff; font-weight: 700; }
+    .md-italic     { color: #ffa8a8; font-style: italic; }
+    .md-strike     { color: #6e7681; text-decoration: line-through; }
+    .md-code       { color: #f0883e; background: #2d1f0e; border-radius: 3px; padding: 0 3px; }
+    .md-codeblock  { color: #adbac7; }
+    .md-codeblock-lang { color: #79c0ff; font-weight: 600; }
+    .md-blockquote { color: #bc8cff; border-left: none; }
+    .md-link-text  { color: #58a6ff; }
+    .md-link-url   { color: #3fb950; }
+    .md-image      { color: #f778ba; }
+    .md-hr         { color: #3d444d; }
+    .md-list       { color: #f0c93a; font-weight: 700; }
+    .md-plain      { color: var(--text); }
 
     /* ── Preview ──────────────────────────────────────── */
     #preview {
@@ -843,7 +898,10 @@
           <div class="pane-label"><span class="dot dot-editor"></span>editor</div>
           <div id="editor-wrap">
             <div id="line-numbers"></div>
-            <textarea id="editor" class="wrap" spellcheck="false" placeholder="Start writing Markdown here…"></textarea>
+            <div id="editor-text-wrap">
+              <div id="editor-highlight" aria-hidden="true"></div>
+              <textarea id="editor" class="wrap" spellcheck="false" placeholder="Start writing Markdown here…"></textarea>
+            </div>
             <div id="wrap-mirror"></div>
           </div>
         </div>
@@ -1078,7 +1136,159 @@ function render() {
   preview.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = false);
   updateStatus();
   updateLineNumbers();
+  highlightEditor();
 }
+
+// ═══════════════════════════════════════════════════
+//  Editor syntax highlighting (overlay technique)
+// ═══════════════════════════════════════════════════
+const hlDiv = document.getElementById('editor-highlight');
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function highlightLine(line) {
+  // Fenced code block lines are handled by the block-level pass below;
+  // this handles inline patterns on a single line.
+
+  // Headings
+  const hm = line.match(/^(#{1,6})( .*)$/);
+  if (hm) {
+    const level = hm[1].length;
+    return `<span class="md-h${level}">${esc(hm[1])}${esc(hm[2])}</span>`;
+  }
+  // Blockquote
+  if (/^>/.test(line)) return `<span class="md-blockquote">${esc(line)}</span>`;
+  // HR
+  if (/^(\*{3,}|-{3,}|_{3,})\s*$/.test(line)) return `<span class="md-hr">${esc(line)}</span>`;
+  // List bullet/number — colour only the marker
+  const lm = line.match(/^(\s*)([-*+]|\d+\.)( .*)$/);
+  if (lm) {
+    return `${esc(lm[1])}<span class="md-list">${esc(lm[2])}</span>${inlineHighlight(lm[3])}`;
+  }
+
+  return inlineHighlight(line);
+}
+
+function inlineHighlight(text) {
+  // Process inline markdown: bold, italic, code, links, images, strikethrough.
+  // We walk through the string consuming tokens left-to-right.
+  let out = '';
+  let i = 0;
+  const s = text;
+  while (i < s.length) {
+    // Inline code  `...`
+    if (s[i] === '`') {
+      const end = s.indexOf('`', i + 1);
+      if (end !== -1) {
+        out += `<span class="md-code">${esc(s.slice(i, end + 1))}</span>`;
+        i = end + 1; continue;
+      }
+    }
+    // Image  ![alt](url)
+    if (s[i] === '!' && s[i+1] === '[') {
+      const cb = s.indexOf(']', i+2);
+      if (cb !== -1 && s[cb+1] === '(') {
+        const cp = s.indexOf(')', cb+2);
+        if (cp !== -1) {
+          out += `<span class="md-image">${esc(s.slice(i, cp+1))}</span>`;
+          i = cp + 1; continue;
+        }
+      }
+    }
+    // Link  [text](url)
+    if (s[i] === '[') {
+      const cb = s.indexOf(']', i+1);
+      if (cb !== -1 && s[cb+1] === '(') {
+        const cp = s.indexOf(')', cb+2);
+        if (cp !== -1) {
+          out += `<span class="md-link-text">${esc(s.slice(i, cb+1))}</span>`
+               + `<span class="md-link-url">${esc(s.slice(cb+1, cp+1))}</span>`;
+          i = cp + 1; continue;
+        }
+      }
+    }
+    // Bold+Italic  ***...***  or ___...___
+    if ((s.slice(i,i+3)==='***' || s.slice(i,i+3)==='___')) {
+      const end = s.indexOf(s.slice(i,i+3), i+3);
+      if (end !== -1) {
+        out += `<span class="md-bold md-italic">${esc(s.slice(i, end+3))}</span>`;
+        i = end + 3; continue;
+      }
+    }
+    // Bold  **...** or __...__
+    if ((s.slice(i,i+2)==='**' || s.slice(i,i+2)==='__')) {
+      const end = s.indexOf(s.slice(i,i+2), i+2);
+      if (end !== -1) {
+        out += `<span class="md-bold">${esc(s.slice(i, end+2))}</span>`;
+        i = end + 2; continue;
+      }
+    }
+    // Italic  *...* or _..._
+    if ((s[i]==='*' || s[i]==='_') && s[i+1] && s[i+1]!==s[i]) {
+      const end = s.indexOf(s[i], i+1);
+      if (end !== -1) {
+        out += `<span class="md-italic">${esc(s.slice(i, end+1))}</span>`;
+        i = end + 1; continue;
+      }
+    }
+    // Strikethrough  ~~...~~
+    if (s.slice(i,i+2)==='~~') {
+      const end = s.indexOf('~~', i+2);
+      if (end !== -1) {
+        out += `<span class="md-strike">${esc(s.slice(i, end+2))}</span>`;
+        i = end + 2; continue;
+      }
+    }
+    // Plain character
+    out += esc(s[i]);
+    i++;
+  }
+  return `<span class="md-plain">${out}</span>`;
+}
+
+function highlightEditor() {
+  const lines = editor.value.split('\n');
+  let html = '';
+  let inCode = false;
+  let codeLang = '';
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const fence = line.match(/^(`{3,})([\w-]*)/);
+
+    if (fence && !inCode) {
+      inCode = true;
+      codeLang = fence[2];
+      html += `<span class="md-codeblock">` + esc(fence[0].slice(0, fence[1].length))
+            + `<span class="md-codeblock-lang">${esc(codeLang)}</span>`
+            + esc(line.slice(fence[1].length + codeLang.length))
+            + `</span>`;
+    } else if (inCode && fence) {
+      inCode = false;
+      codeLang = '';
+      html += `<span class="md-codeblock">${esc(line)}</span>`;
+    } else if (inCode) {
+      html += `<span class="md-codeblock">${esc(line)}</span>`;
+    } else {
+      html += highlightLine(line);
+    }
+
+    if (i < lines.length - 1) html += '\n';
+  }
+
+  hlDiv.innerHTML = html;
+  // Keep overlay scroll in sync with textarea
+  hlDiv.scrollTop  = editor.scrollTop;
+  hlDiv.scrollLeft = editor.scrollLeft;
+}
+
+// Sync overlay scroll whenever the textarea scrolls
+editor.addEventListener('scroll', () => {
+  hlDiv.scrollTop  = editor.scrollTop;
+  hlDiv.scrollLeft = editor.scrollLeft;
+});
 
 // ═══════════════════════════════════════════════════
 //  Line-number gutter (wrap-aware)
