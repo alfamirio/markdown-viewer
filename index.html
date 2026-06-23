@@ -517,10 +517,11 @@
     }
     .cm-gutterElement { font-size: 13.5px; }
     .cm-activeLineGutter {
-      background: transparent !important;
-      color: var(--text-muted) !important;
+      /* no !important — EditorView.theme() in the module script overrides this */
+      background: transparent;
+      color: var(--text-muted);
     }
-    .cm-activeLine { background: var(--surface) !important; }
+    .cm-activeLine { background: var(--surface); } /* theme override applied when focused */
     .cm-selectionBackground, .cm-editor.cm-focused .cm-selectionBackground {
       background: #2d4f8a !important;  /* richer blue — visible over any token colour */
     }
@@ -1687,6 +1688,7 @@ function switchNote(id) {
   renderSidebar();
   editor.scrollTop = 0;
   preview.scrollTop = 0;
+  saveConfig();
 }
 
 // ── Sidebar DOM ────────────────────────────────────
@@ -1821,10 +1823,14 @@ marked.use({
     },
     renderer(token) {
       const id = 'mmd-' + Math.random().toString(36).slice(2, 8);
-      // Escape HTML entities so Mermaid receives clean diagram source
+      // Escape HTML entities so the browser doesn't interpret diagram source as markup.
+      // We also stash the *raw* source in data-src so the PDF export path can read
+      // it reliably — textContent would work today but would break if Mermaid ever
+      // replaces the div contents with an SVG before exportPdf walks the container.
       const safe = token.text
         .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      return `<div class="mermaid-wrap"><div class="mermaid" id="${id}">${safe}</div></div>\n`;
+      const rawAttr = token.text.replace(/"/g, '&quot;');
+      return `<div class="mermaid-wrap"><div class="mermaid" id="${id}" data-src="${rawAttr}">${safe}</div></div>\n`;
     }
   }]
 });
@@ -1850,6 +1856,7 @@ function render() {
   preview.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = false);
   preview.querySelectorAll('img').forEach(img => {
     img.onerror = () => {
+      if (!img.parentNode) return; // img detached — render() was called again before load failed
       img.style.display = 'none';
       const note = document.createElement('span');
       note.style.cssText = 'display:inline-block;padding:4px 8px;border-radius:4px;background:#1c2128;color:#484f58;font-family:monospace;font-size:12px;border:1px solid #30363d';
@@ -1875,7 +1882,8 @@ editor.addEventListener('scroll', () => {
   if (suppressEditorScroll) return;
   const pct = editor.scrollTop / (editor.scrollHeight - editor.clientHeight || 1);
   suppressPreviewScroll = true;
-  preview.scrollTop = pct * (preview.scrollHeight - preview.clientHeight);
+  const maxPreview = Math.max(0, preview.scrollHeight - preview.clientHeight);
+  preview.scrollTop = Math.max(0, Math.min(pct * maxPreview, maxPreview));
   requestAnimationFrame(() => { suppressPreviewScroll = false; });
 });
 
@@ -1883,7 +1891,8 @@ preview.addEventListener('scroll', () => {
   if (suppressPreviewScroll) return;
   const pct = preview.scrollTop / (preview.scrollHeight - preview.clientHeight || 1);
   suppressEditorScroll = true;
-  editor.scrollTop = pct * (editor.scrollHeight - editor.clientHeight);
+  const maxEditor = Math.max(0, editor.scrollHeight - editor.clientHeight);
+  editor.scrollTop = Math.max(0, Math.min(pct * maxEditor, maxEditor));
   requestAnimationFrame(() => { suppressEditorScroll = false; });
 });
 
@@ -2035,7 +2044,14 @@ function fmtLine(prefix) {
   const le = editor.value.indexOf('\n', s);
   const e2 = le === -1 ? editor.value.length : le;
   const line = editor.value.slice(ls, e2);
-  spliceText(ls, e2, line.startsWith(prefix) ? line.slice(prefix.length) : prefix + line);
+  // Exact-match toggle: only strip the prefix when the line begins with it
+  // *and* the character immediately after it is not another '#'.
+  // Without this guard, fmtLine('## ') on '### Foo' would match startsWith('## ')
+  // and strip two chars — turning '### Foo' into '# Foo' instead of prepending '## '.
+  const hashes = prefix.trimEnd(); // e.g. '##' from '## '
+  const isExact = line.startsWith(prefix) &&
+    !(hashes.split('').every(c => c === '#') && line[hashes.length] === '#');
+  spliceText(ls, e2, isExact ? line.slice(prefix.length) : prefix + line);
 }
 
 function fmtBlock() {
@@ -2305,8 +2321,12 @@ async function exportPdf() {
         if (!mmdEl) return;
         pdfProgress(true, 'Rendering diagram…');
         const uid = 'pdfmmd-' + Math.random().toString(36).slice(2,9);
+        // Prefer data-src (raw diagram source stored by the renderer) over
+        // textContent, which would fail if Mermaid has already replaced the
+        // element's content with a rendered SVG.
+        const src = (mmdEl.dataset.src || mmdEl.textContent).trim();
         try {
-          const result = await mermaidToDataURL(mmdEl.textContent.trim(), uid);
+          const result = await mermaidToDataURL(src, uid);
           if (result) await renderDataURLImage(result.dataURL, result.w, result.h);
         } catch(e) { console.warn('Mermaid render failed', e); }
         pdfProgress(true, 'Building PDF…');
@@ -2615,9 +2635,16 @@ function updateToc() {
     return;
   }
 
+  // Escape heading text before interpolating into HTML to prevent XSS —
+  // a heading like ## <img src=x onerror=alert(1)> would otherwise execute.
+  function esc(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
   tocList.innerHTML = headings.map(h => {
     const indent = `toc-h${h.level}`;
-    return `<a class="toc-item ${indent}" data-line="${h.line}" onclick="tocJump(${h.line})" title="${h.text}">${h.text}</a>`;
+    const safe   = esc(h.text);
+    return `<a class="toc-item ${indent}" data-line="${h.line}" onclick="tocJump(${h.line})" title="${safe}">${safe}</a>`;
   }).join('');
 }
 
@@ -2917,6 +2944,7 @@ function saveConfig() {
     sidebar:          !document.getElementById('sidebar').classList.contains('collapsed'),
     toc:              tocVisible,
     viewMode:         currentViewMode,
+    activeId:         activeId,
   };
   localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
 }
@@ -2944,7 +2972,7 @@ function dismissWarning() {
       const name = k.replace('md_editor_', '') || 'Untitled';
       const id   = genId();
       notes.push({ id, name });
-      localStorage.setItem(noteContent(id), localStorage.getItem(k));
+      localStorage.setItem(noteContent(id), localStorage.getItem(k) ?? '');
       localStorage.removeItem(k);
     });
     saveIndex();
@@ -2959,7 +2987,14 @@ function dismissWarning() {
   }
 
   renderSidebar();
-  switchNote(notes[0].id);
+  // Restore the last-active note if it still exists; fall back to the first note.
+  try {
+    const cfg = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
+    const savedId = cfg.activeId && notes.find(n => n.id === cfg.activeId) ? cfg.activeId : null;
+    switchNote(savedId || notes[0].id);
+  } catch(e) {
+    switchNote(notes[0].id);
+  }
 
   // Restore saved config
   try {
