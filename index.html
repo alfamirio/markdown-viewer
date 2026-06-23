@@ -107,19 +107,44 @@
 
     #status {
       font-family: var(--mono);
-      font-size: 11px;
-      color: var(--text-dim);
+      font-size: 12px;
+      color: var(--text-muted);
       margin-left: auto;
       padding: 0 4px;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
       white-space: nowrap;
     }
+    #status .stat { letter-spacing: 0.1px; }
+    .stat-sep { color: var(--divider); }
 
     #save-indicator { display: inline-flex; align-items: center; gap: 5px; transition: color 0.2s; }
     #save-indicator.saved   { color: var(--green); }
     #save-indicator.unsaved { color: var(--orange); }
+
+    #btn-reset-all {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 5px 11px;
+      border-radius: var(--radius);
+      border: 1px solid #f8514966;
+      background: #f8514922;
+      color: var(--red);
+      font-size: 16px;
+      cursor: pointer;
+      opacity: 0.85;
+      transition: opacity 0.15s, background 0.15s, border-color 0.15s, color 0.15s;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    #btn-reset-all:hover {
+      opacity: 1;
+      background: var(--red);
+      border-color: var(--red);
+      color: #fff;
+    }
 
     /* ── Body row (sidebar + editor area) ─────────────── */
     #body-row {
@@ -435,7 +460,7 @@
     #line-numbers {
       flex-shrink: 0;
       width: 44px;
-      padding: 20px 0 20px;
+      padding: 0 0 20px;
       background: var(--bg);
       border-right: 1px solid var(--border);
       overflow: hidden;
@@ -444,13 +469,15 @@
       user-select: none;
     }
     #line-numbers span {
-      display: block;
+      display: flex;
+      align-items: flex-start;
       overflow: hidden;
       font-family: var(--mono);
       font-size: 13.5px;
       line-height: 1.7;
       color: var(--text-dim);
       padding-right: 10px;
+      justify-content: flex-end;
       transition: color 0.1s;
     }
     #line-numbers span.active-line {
@@ -506,6 +533,7 @@
       resize: none;
       overflow-y: auto;
       tab-size: 2;
+      box-sizing: border-box;
       scrollbar-width: thin;
       scrollbar-color: var(--divider) transparent;
     }
@@ -519,8 +547,8 @@
     .md-sel { background: #1f4068; border-radius: 1px; }
 
     /* ── Markdown syntax colours ──────────────────────── */
-    .md-h1         { color: #ff7b72; font-weight: 700; font-size: 1.18em; }
-    .md-h2         { color: #ffa657; font-weight: 700; font-size: 1.1em; }
+    .md-h1         { color: #ff7b72; font-weight: 700; }
+    .md-h2         { color: #ffa657; font-weight: 700; }
     .md-h3         { color: #f0c93a; font-weight: 600; }
     .md-h4         { color: #7ee787; font-weight: 600; }
     .md-h5         { color: #79c0ff; font-weight: 600; }
@@ -970,6 +998,7 @@
     <div class="toolbar-sep"></div>
 
     <button class="btn" id="btn-wrap" data-tip="Toggle word wrap" onclick="toggleWrap()">wrap</button>
+    <button class="btn active" id="btn-highlight" data-tip="Toggle syntax highlighting" onclick="toggleHighlight()">hl</button>
 
     <div class="toolbar-sep"></div>
 
@@ -978,8 +1007,6 @@
     <input type="file" id="md-file-input" accept=".md,.markdown,.txt" style="display:none" onchange="onMdFileLoad(event)" />
     <button class="btn" id="btn-pdf" data-tip="Export PDF" onclick="exportPdf()">↓ .pdf</button>
     <button class="btn" data-tip="Copy raw markdown"     onclick="copyRaw()">⎘ copy</button>
-    <button class="btn" data-tip="Delete this note"      onclick="deleteCurrentNote()" style="color:var(--red)">✕ note</button>
-
     <button class="btn" data-tip="Keyboard shortcuts  ?" onclick="openHkModal()" style="margin-left:4px">? keys</button>
 
     <div class="toolbar-sep"></div>
@@ -992,8 +1019,11 @@
     </div>
 
     <div id="status">
-      <span id="word-count">0 words</span>
+      <span id="word-count" class="stat">0 words</span>
+      <span class="stat-sep">·</span>
+      <span id="line-count" class="stat">0 lines</span>
       <span id="save-indicator" class="saved">● saved</span>
+      <button id="btn-reset-all" data-tip="Delete all notes & reset app" onclick="resetAllData()" title="Delete all notes & reset app">🗑</button>
     </div>
   </div>
 
@@ -1093,7 +1123,9 @@ const editor       = document.getElementById('editor');
 const preview      = document.getElementById('preview');
 const saveEl       = document.getElementById('save-indicator');
 const wordEl       = document.getElementById('word-count');
+const lineEl       = document.getElementById('line-count');
 const btnWrap      = document.getElementById('btn-wrap');
+const btnHighlight = document.getElementById('btn-highlight');
 const notesList    = document.getElementById('notes-list');
 const noteTitleEl  = document.getElementById('note-title-input');
 const btnSidebar   = document.getElementById('btn-sidebar');
@@ -1428,6 +1460,7 @@ function inlineHighlight(text) {
 }
 
 function highlightEditor() {
+  if (!hlOn) return;
   const lines = editor.value.split('\n');
   let html = '';
   let inCode = false;
@@ -1535,20 +1568,22 @@ let mirrorMetricsDirty = true;
 // its own matching top/bottom padding applied once for the whole column.
 function syncMirrorMetrics() {
   const cs = getComputedStyle(editor);
-  wrapMirror.style.width      = editor.clientWidth + 'px';
-  wrapMirror.style.fontSize   = cs.fontSize;
-  wrapMirror.style.fontFamily = cs.fontFamily;
-  wrapMirror.style.fontWeight = cs.fontWeight;
-  wrapMirror.style.lineHeight = cs.lineHeight;
+  const pl = parseFloat(cs.paddingLeft)  || 0;
+  const pr = parseFloat(cs.paddingRight) || 0;
+  // editor is border-box: clientWidth includes padding, so subtract it to get content width
+  wrapMirror.style.width        = (editor.clientWidth - pl - pr) + 'px';
+  wrapMirror.style.padding      = '0';
+  wrapMirror.style.border       = 'none';
+  wrapMirror.style.boxSizing    = 'content-box';
+  wrapMirror.style.fontSize     = cs.fontSize;
+  wrapMirror.style.fontFamily   = cs.fontFamily;
+  wrapMirror.style.fontWeight   = cs.fontWeight;
+  wrapMirror.style.lineHeight   = cs.lineHeight;
   wrapMirror.style.letterSpacing = cs.letterSpacing;
-  wrapMirror.style.paddingTop = '0px';
-  wrapMirror.style.paddingBottom = '0px';
-  wrapMirror.style.paddingLeft = cs.paddingLeft;
-  wrapMirror.style.paddingRight = cs.paddingRight;
-  wrapMirror.style.borderWidth = cs.borderWidth;
-  wrapMirror.style.boxSizing  = cs.boxSizing;
-  wrapMirror.style.tabSize    = cs.tabSize;
-  wrapMirror.style.whiteSpace = wrapOn ? 'pre-wrap' : 'pre';
+  wrapMirror.style.tabSize      = cs.tabSize;
+  wrapMirror.style.whiteSpace   = wrapOn ? 'pre-wrap' : 'pre';
+  wrapMirror.style.wordBreak    = 'break-word';
+  wrapMirror.style.overflowWrap = 'break-word';
   mirrorMetricsDirty = false;
 }
 
@@ -1557,26 +1592,28 @@ function updateLineNumbers() {
   if (!ln) return;
   if (mirrorMetricsDirty) syncMirrorMetrics();
 
+  const cs   = getComputedStyle(editor);
+  const rowH = parseFloat(cs.lineHeight) || 22.95;
+  const ptop = parseFloat(cs.paddingTop) || 0;
+
+  // Sync gutter top padding to textarea's exact computed padding-top
+  ln.style.paddingTop = ptop + 'px';
+
   const lines = editor.value.split('\n');
   const cursorLine = editor.value.substring(0, editor.selectionStart).split('\n').length;
 
-  // One row of unwrapped text, in px, per the shared line-height.
-  const rowH = parseFloat(getComputedStyle(editor).lineHeight) || 22.95;
-
   // Measure how many visual rows each logical line takes once wrapped.
-  // Only needed when wrap is on and lines might actually fold; when
-  // wrap is off every logical line is exactly one visual row. Short
-  // lines can't possibly wrap, so skip the (layout-forcing) mirror
-  // measurement for those to keep large documents responsive.
   let rowCounts;
   if (wrapOn) {
-    // Conservative character estimate of how many chars fit one row,
-    // derived from a monospace assumption — used only to short-circuit
-    // obviously-short lines, never to compute the final row count.
-    const approxCharsPerRow = Math.max(20, Math.floor(editor.clientWidth / (parseFloat(getComputedStyle(editor).fontSize) * 0.62)));
+    // Use mirror content width (already set in syncMirrorMetrics) to estimate
+    // chars per row — but use a conservative threshold so borderline lines
+    // always go through the mirror rather than being wrongly skipped.
+    const mirrorW = parseFloat(wrapMirror.style.width) || 999;
+    const charW   = parseFloat(cs.fontSize) * 0.601; // monospace ~0.6× em
+    const approxCharsPerRow = Math.max(10, Math.floor(mirrorW / charW));
     rowCounts = lines.map(line => {
-      if (line.length < approxCharsPerRow * 0.9) return 1;
-      wrapMirror.textContent = line;
+      if (line.length < approxCharsPerRow * 0.75) return 1; // safely short
+      wrapMirror.textContent = line || ' ';
       return Math.max(1, Math.round(wrapMirror.scrollHeight / rowH));
     });
   } else {
@@ -1625,8 +1662,11 @@ preview.addEventListener('scroll', () => {
 //  Status
 // ═══════════════════════════════════════════════════
 function updateStatus() {
-  const words = editor.value.trim() ? editor.value.trim().split(/\s+/).length : 0;
+  const val   = editor.value;
+  const words = val.trim() ? val.trim().split(/\s+/).length : 0;
+  const lines = val ? val.split('\n').length : 0;
   wordEl.textContent = words + (words === 1 ? ' word' : ' words');
+  lineEl.textContent = lines + (lines === 1 ? ' line' : ' lines');
 }
 
 function markSaved()   { saveEl.className = 'saved';   saveEl.textContent = '● saved'; }
@@ -1796,6 +1836,25 @@ function toggleWrap() {
   btnWrap.classList.toggle('active', wrapOn);
   mirrorMetricsDirty = true;
   updateLineNumbers();
+}
+
+// ═══════════════════════════════════════════════════
+//  Syntax highlight toggle
+// ═══════════════════════════════════════════════════
+let hlOn = true;
+function toggleHighlight() {
+  hlOn = !hlOn;
+  btnHighlight.classList.toggle('active', hlOn);
+  if (hlOn) {
+    hlDiv.style.visibility = '';
+    editor.style.color = 'transparent';
+    editor.style.caretColor = '';
+    highlightEditor();
+  } else {
+    hlDiv.style.visibility = 'hidden';
+    editor.style.color = 'var(--text)';
+    editor.style.caretColor = 'var(--text)';
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -2371,31 +2430,6 @@ You can also write \`inline code\` inside a sentence, or combine **\`bold code\`
 
 ## 5. Code blocks
 
-\`\`\`javascript
-// A quick sort implementation
-function quickSort(arr) {
-  if (arr.length <= 1) return arr;
-  const pivot = arr[Math.floor(arr.length / 2)];
-  const left  = arr.filter(x => x < pivot);
-  const mid   = arr.filter(x => x === pivot);
-  const right = arr.filter(x => x > pivot);
-  return [...quickSort(left), ...mid, ...quickSort(right)];
-}
-
-console.log(quickSort([3, 6, 8, 10, 1, 2, 1]));
-\`\`\`
-
-\`\`\`python
-# Fibonacci with memoization
-from functools import lru_cache
-
-@lru_cache(maxsize=None)
-def fib(n):
-    return n if n < 2 else fib(n - 1) + fib(n - 2)
-
-print([fib(i) for i in range(10)])
-\`\`\`
-
 \`\`\`bash
 # Install dependencies and run
 npm install && npm run dev
@@ -2426,8 +2460,6 @@ npm install && npm run dev
 
 ## 8. Mermaid diagrams
 
-**Flowchart:**
-
 \`\`\`mermaid
 flowchart LR
     A([Start]) --> B{Is it working?}
@@ -2437,53 +2469,26 @@ flowchart LR
     E --> B
 \`\`\`
 
-**Sequence diagram:**
-
-\`\`\`mermaid
-sequenceDiagram
-    participant U as User
-    participant E as Editor
-    participant P as Preview
-
-    U->>E: Type Markdown
-    E->>E: Syntax highlight
-    E->>P: Parse & render
-    P-->>U: Live preview
-\`\`\`
-
-**Pie chart:**
-
-\`\`\`mermaid
-pie title Time spent writing
-    "Thinking" : 40
-    "Writing"  : 35
-    "Editing"  : 25
-\`\`\`
-
----
-
-## 9. Keyboard shortcuts
-
-| Action              | Shortcut                  |
-|---------------------|---------------------------|
-| Save                | \`Ctrl + S\`              |
-| Bold                | \`Ctrl + B\`              |
-| Italic              | \`Ctrl + I\`              |
-| Inline code         | \`Ctrl + \`\`             |
-| Download .md        | \`Ctrl + Shift + S\`      |
-| Export PDF          | \`Ctrl + P\`              |
-| Toggle word wrap    | \`Alt + Z\`               |
-| Editor only         | \`Alt + 1\`               |
-| Split view          | \`Alt + 2\`               |
-| Preview only        | \`Alt + 3\`               |
-| Toggle sidebar      | \`Ctrl + \\\\\`           |
-| New note            | \`Ctrl + Alt + N\`        |
-| Show shortcuts      | \`?\`                     |
-
 ---
 
 *Happy writing!* ✨
 `;
+}
+
+// ═══════════════════════════════════════════════════
+//  Reset all data
+// ═══════════════════════════════════════════════════
+function resetAllData() {
+  if (!confirm('Delete ALL notes and reset the app to a fresh state?\n\nThis cannot be undone.')) return;
+  // Remove notes index
+  localStorage.removeItem(NOTES_INDEX_KEY);
+  // Remove all note content entries
+  Object.keys(localStorage)
+    .filter(k => k.startsWith('md_note_') || k.startsWith('md_editor_'))
+    .forEach(k => localStorage.removeItem(k));
+  // Remove any other app config keys
+  ['md_sidebar_open', 'md_toc_open', 'md_view_mode', 'md_wrap'].forEach(k => localStorage.removeItem(k));
+  location.reload();
 }
 
 // ═══════════════════════════════════════════════════
