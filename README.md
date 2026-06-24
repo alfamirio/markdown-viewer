@@ -1,6 +1,6 @@
 # Markdown Viewer & Editor
 
-A minimalist, real-time Markdown editor and viewer packed into a single HTML file. Designed with a sleek dark interface, optimized to be fast, lightweight, and completely autonomous — no backend required.
+A minimalist, real-time Markdown editor and viewer. Designed with a sleek dark interface, optimized to be fast, lightweight, and completely autonomous — no backend required.
 
 ## Core features
 
@@ -13,7 +13,7 @@ A minimalist, real-time Markdown editor and viewer packed into a single HTML fil
 * **Rich syntax highlighting:** Toggle-able per-token coloring for headings (each level a distinct hue), bold, italic, strikethrough, inline code, blockquotes, links, URLs, lists, horizontal rules, and fenced code blocks with full language-aware highlighting.
 * **Toolbar formatting:** Two-row toolbar with one-click buttons for bold, italic, strikethrough, inline code, H1–H3, unordered list, ordered list, blockquote, code block, horizontal rule, and link insertion.
 * **Visual table picker:** Interactive 8×8 grid popup for inserting Markdown tables — hover to pick dimensions, click to insert.
-* **Advanced export options:** Upload or download `.md` files, export a clean standalone `.html` file, copy raw Markdown to clipboard, and generate paginated `.pdf` output with a progress toast.
+* **Advanced export options:** Upload or download `.md` files, export a clean standalone `.html` file, copy raw Markdown to clipboard, and generate paginated `.pdf` output with selectable text and embedded fonts.
 * **Word wrap toggle:** Independently controls wrapping in both the editor and preview, including horizontal scrolling for code blocks when wrap is off.
 * **Live word & line count:** Real-time statistics displayed in the toolbar status bar.
 * **Keyboard shortcuts:** Full support for formatting, layout switching, note navigation, file operations, and workspace management.
@@ -25,25 +25,33 @@ A minimalist, real-time Markdown editor and viewer packed into a single HTML fil
 
 Built using standard web technologies and external dependencies loaded via CDN:
 
-* **Markup & styling:** Semantic HTML5 and custom CSS3 (using *Inter* and *JetBrains Mono* fonts via Google Fonts).
+* **Markup & styling:** Semantic HTML5 and custom CSS3 (using *Inter* and *JetBrains Mono* fonts served locally).
+* **Bootstrap 5.3.3:** Layout utilities and modal components.
 * **CodeMirror 6:** Full-featured editor engine (via ESM from esm.sh). Provides line numbers, syntax highlighting, bracket matching, history, and Markdown language support with embedded code language detection.
 * **Marked.js (v12.0.0):** Fast Markdown-to-HTML processing and rendering.
 * **Mermaid (v10.9.0):** Client-side diagram rendering for ` ```mermaid ``` ` fenced blocks.
-* **html2canvas (v1.4.1) & jsPDF (v2.5.1):** Client-side rasterization and PDF document generation.
+* **jsPDF (v2.5.1):** Client-side PDF generation with embedded local fonts for full Unicode support (ñ, á, etc.).
 
 ## Project structure
 
-Single File Application (SFA) architecture — everything is self-contained:
-
 ```text
-└── index.html      # HTML structure, embedded CSS, and all JS logic
+├── index.html          # HTML structure and app shell
+├── styles.css          # All styling and design tokens
+├── app.js              # Application logic
+├── cm-editor.js        # CodeMirror 6 setup and textarea shim
+└── fonts/
+    ├── Inter-Regular.ttf
+    ├── Inter-Bold.ttf
+    ├── Inter-Italic.ttf
+    └── JetBrainsMono-Regular.ttf
 ```
 
 ## Keyboard shortcuts
-Use ? to view keyboard shortcuts.
+
+Use `?` to view keyboard shortcuts.
 
 ## Usage notes and warnings
 
 > **Storage limitation:** Notes are saved exclusively in your browser's `localStorage`. If you clear site data or browser cache, your notes will be deleted. Export backups regularly using the **↓ .md** button or `Ctrl + Shift + S`.
 
-> **No warranty:** This tool is provided as-is, with no warranty of any kind. It is not intended for production. Just educative usage.
+> **No warranty:** This tool is provided as-is, with no warranty or responability of any kind. For educational use.
