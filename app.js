@@ -2100,7 +2100,7 @@ function makeDragResizer(splitter, axis, cursor, onMove, isLocked) {
 function DEFAULT_CONTENT(name) {
   return `# ${name}
 
-Lorem ipsum dolor sit amet.
+Lorem ipsum dolor sit amet, consectetur adipiscing elit.
 
 > This note is **auto-saved** to \`localStorage\`. Use it as a reference for everything this editor supports.
 
@@ -2108,7 +2108,7 @@ Lorem ipsum dolor sit amet.
 
 ## 1. Text formatting
 
-Regular paragraph text. Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+Regular paragraph text.
 
 **Bold text** and *italic text* and ***bold italic*** and ~~strikethrough~~.
 

@@ -628,7 +628,7 @@ html, body {
 /* ── Tag system ────────────────────────────────── */
 .toolbar-tags-label {
   font-family: var(--mono); font-size: 10px; letter-spacing: 0.5px;
-  text-transform: uppercase; color: var(--text-dim);
+  text-transform: uppercase; color: var(--text);
   margin-right: 2px; white-space: nowrap; flex-shrink: 0;
 }
 
@@ -649,7 +649,7 @@ html, body {
   flex: 1; min-width: 48px; background: transparent; border: none; outline: none;
   font-family: var(--mono); font-size: 11px; color: var(--text); padding: 1px 0; line-height: 1.5;
 }
-#tag-input::placeholder { color: var(--text-dim); }
+#tag-input::placeholder { color: var(--text); }
 
 .tag-chip {
   display: inline-flex; align-items: center; gap: 2px;

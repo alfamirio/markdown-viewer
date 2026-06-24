@@ -45,10 +45,10 @@
       <div class="toolbar-sep"></div>
       <div class="toolbar-sep"></div>
 
-      <button class="btn btn-toolbar" data-tip="Import .md, .txt or .json file" onclick="loadFile()">↑ import</button>
+      <button class="btn btn-toolbar" data-tip="Import md, txt or json file" onclick="loadFile()">↑ import</button>
       <input type="file" id="file-input" accept=".md,.markdown,.txt,.json" class="d-none" onchange="onFileLoad(event)" />
       <div class="toolbar-sep"></div>
-      <button class="btn btn-toolbar" data-tip="Download .md"           onclick="downloadMd()">↓ md</button>
+      <button class="btn btn-toolbar" data-tip="Download md"           onclick="downloadMd()">↓ md</button>
       <button class="btn btn-toolbar" id="btn-pdf" data-tip="Export PDF" onclick="exportPdf()">↓ pdf</button>
       <button class="btn btn-toolbar" data-tip="Export standalone HTML"  onclick="exportHtml()">↓ html</button>
       <button class="btn btn-toolbar" data-tip="Export all notes as JSON" onclick="exportJson()">↓ json</button>
@@ -219,7 +219,7 @@
     <span class="warn-icon">⚠</span>
     <span class="warn-text flex-grow-1">
       <strong>localStorage only</strong> — Notes are saved in your browser's localStorage and will be lost if you clear site data.
-      <strong>Export regularly</strong> using ↓&nbsp;.md.
+      <strong>Export regularly</strong> using ↓&nbsp;md.
       This tool is provided <strong>as-is, with no warranty</strong> of any kind — not for production use.
     </span>
     <button id="btn-warn-dismiss" class="btn btn-sm" onclick="dismissWarning()" data-tip="Dismiss warning">×</button>
@@ -300,7 +300,7 @@
         <div class="hk-section-title">File & editor</div>
         <div class="hk-grid row row-cols-2 g-0">
           <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Save now</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>S</kbd></span></div>
-          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Download .md</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>S</kbd></span></div>
+          <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Download md</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>S</kbd></span></div>
           <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Export PDF</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>P</kbd></span></div>
           <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Export HTML</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Ctrl</kbd><span class="hk-plus">+</span><kbd>Shift</kbd><span class="hk-plus">+</span><kbd>H</kbd></span></div>
           <div class="hk-row col d-flex align-items-center justify-content-between py-1 gap-3"><span class="hk-desc">Toggle word wrap</span><span class="hk-keys d-flex align-items-center gap-1 flex-shrink-0"><kbd>Alt</kbd><span class="hk-plus">+</span><kbd>Z</kbd></span></div>
