@@ -32,10 +32,10 @@
       <button class="btn btn-toolbar" data-tip="Import .md, .txt or .json file" onclick="loadFile()">↑ import</button>
       <input type="file" id="file-input" accept=".md,.markdown,.txt,.json" class="d-none" onchange="onFileLoad(event)" />
       <div class="toolbar-sep"></div>
-      <button class="btn btn-toolbar" data-tip="Download .md"           onclick="downloadMd()">↓ .md</button>
-      <button class="btn btn-toolbar" id="btn-pdf" data-tip="Export PDF" onclick="exportPdf()">↓ .pdf</button>
-      <button class="btn btn-toolbar" data-tip="Export standalone HTML"  onclick="exportHtml()">↓ .html</button>
-      <button class="btn btn-toolbar" data-tip="Export all notes as JSON" onclick="exportJson()">↓ .json</button>
+      <button class="btn btn-toolbar" data-tip="Download .md"           onclick="downloadMd()">↓ md</button>
+      <button class="btn btn-toolbar" id="btn-pdf" data-tip="Export PDF" onclick="exportPdf()">↓ pdf</button>
+      <button class="btn btn-toolbar" data-tip="Export standalone HTML"  onclick="exportHtml()">↓ html</button>
+      <button class="btn btn-toolbar" data-tip="Export all notes as JSON" onclick="exportJson()">↓ json</button>
       <div class="toolbar-sep"></div>
       <button class="btn btn-toolbar" id="btn-copy" data-tip="Copy raw markdown" onclick="copyRaw()">⎘ copy</button>
 
@@ -62,16 +62,18 @@
 
       <div class="toolbar-sep"></div>
 
-      <div id="status" class="d-flex align-items-center gap-2 ms-auto text-nowrap">
+      <div id="status" class="d-flex align-items-center gap-1 ms-auto text-nowrap">
         <button class="btn btn-toolbar p-0 me-1" data-tip="Keyboard shortcuts ?" onclick="openHkModal()">? keys</button>
-        <span class="stat-sep">·</span>
-        <span id="storage-count" class="stat">0% (0 KB)</span>
-        <span class="stat-sep">·</span>
-        <span id="word-count" class="stat">0 words</span>
-        <span class="stat-sep">·</span>
-        <span id="line-count" class="stat">0 lines</span>
-        <p id="local-storage-indicator" class="badge bg-warning text-dark mb-0">Local storage</p>
+        <span class="stat-sep">|</span>
+        <span class="stat"><span class="stat-label">storage</span><span id="storage-count">0% · 0 KB</span></span>
+        <span class="stat-sep">|</span>
+        <span class="stat"><span id="word-count">0</span> <span class="stat-label">words</span></span>
+        <span class="stat-sep">|</span>
+        <span class="stat"><span id="line-count">0</span> <span class="stat-label">lines</span></span>
+        <span class="stat-sep">|</span>
         <span id="save-indicator" class="saved">● saved</span>
+        <span class="stat-sep">|</span>
+        <p id="local-storage-indicator" class="badge bg-warning text-dark mb-0">localStorage</p>
         <button id="btn-reset-all" data-tip="Delete all notes & reset app" onclick="resetAllData()">🗑</button>
       </div>
     </div>

@@ -420,8 +420,8 @@ function updateStatus() {
   const trimmed = val.trim();
   const words   = trimmed ? trimmed.split(/\s+/).length : 0;
   const lines   = val ? val.split('\n').length : 0;
-  wordEl.textContent = words + (words === 1 ? ' word'  : ' words');
-  lineEl.textContent = lines + (lines === 1 ? ' line'  : ' lines');
+  wordEl.textContent = words;
+  lineEl.textContent = lines;
 }
 
 function setSaveState(saved) {
@@ -2258,7 +2258,7 @@ function updateLocalStorageUsage() {
 
   const storageElem = document.getElementById('storage-count');
   if (storageElem) {
-    storageElem.textContent = `${percentageStr}% (${sizeInKB} KB)`;
+    storageElem.textContent = `${percentageStr}% · ${sizeInKB} KB`;
     
     // Ahora evaluamos el número real
     if (percentageNum > 90) {
@@ -2266,7 +2266,7 @@ function updateLocalStorageUsage() {
     } else if (percentageNum > 70) {
       storageElem.style.color = 'var(--orange)';
     } else {
-      storageElem.style.color = 'var(--text-muted)';
+      storageElem.style.color = '#e6edf3';
     }
   }
 }

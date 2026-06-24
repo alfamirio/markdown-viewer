@@ -29,11 +29,6 @@
     { tag: tags.heading6,              color: '#d2a8ff', fontWeight: '600' },
     { tag: tags.heading,               color: '#ff7b72', fontWeight: '700' }, // fallback
 
-    // ── Inline emphasis ───────────────────────────────────────────
-    { tag: tags.strong,                color: '#ffa657', fontWeight: '700' },
-    { tag: tags.emphasis,              color: '#d2a8ff', fontStyle: 'italic' },
-    { tag: tags.strikethrough,         color: '#8b949e', textDecoration: 'line-through' },
-
     // ── Links & URLs ──────────────────────────────────────────────
     { tag: tags.link,                  color: '#3fb950', fontWeight: '600' },   // [name] → green
     { tag: tags.url,                   color: '#58a6ff', fontStyle: 'italic' }, // (url)  → blue
@@ -42,19 +37,24 @@
     // ── Blockquote ────────────────────────────────────────────────
     { tag: tags.quote,                 color: '#c9d1d9', fontStyle: 'italic' },
 
+    // ── Markup punctuation (##, **, __, ~~, >, -, ``) ─────────────
+    // These are the literal sigil characters — must be clearly visible
+    { tag: tags.processingInstruction, color: '#aeb5bd', fontWeight: '700' },
+    { tag: tags.meta,                  color: '#aeb5bd' },
+
+    // ── Lists ─────────────────────────────────────────────────────
+    { tag: tags.list,                  color: '#97eb9f' },
+
+    // ── Horizontal rule ───────────────────────────────────────────
+    { tag: tags.contentSeparator,      color: '#58faff', fontWeight: '700' },
+
     // ── Inline code ───────────────────────────────────────────────
     { tag: tags.monospace,             color: '#ffa657' },
 
-    // ── Markup punctuation (##, **, __, ~~, >, -, ``) ─────────────
-    // These are the literal sigil characters — must be clearly visible
-    { tag: tags.processingInstruction, color: '#6e7681', fontWeight: '600' },
-    { tag: tags.meta,                  color: '#6e7681' },
-
-    // ── Lists ─────────────────────────────────────────────────────
-    { tag: tags.list,                  color: '#7ee787' },
-
-    // ── Horizontal rule ───────────────────────────────────────────
-    { tag: tags.contentSeparator,      color: '#58a6ff', fontWeight: '700' },
+    // ── Inline emphasis ───────────────────────────────────────────
+    { tag: tags.strong,                color: '#ffa657', fontWeight: '700' },
+    { tag: tags.emphasis,              color: '#d2a8ff', fontStyle: 'italic' },
+    { tag: tags.strikethrough,         color: '#8b949e', textDecoration: 'line-through' },
 
     // ── Code fence — fenced block content (generic fallback) ──────
     { tag: tags.comment,               color: '#8b949e', fontStyle: 'italic' },
