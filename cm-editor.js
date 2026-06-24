@@ -142,16 +142,18 @@
     // CM6 draws selection via .cm-selectionBackground on a layer div —
     // these rules ensure the colour is rich enough to read through any
     // token colour (italic purple, bold orange, green links, etc.)
+    // and through the semi-transparent active-line overlay above.
     '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
       background: '#2d4f8a !important',
     },
     '&.cm-focused .cm-selectionBackground': {
       background: '#3a5fa0 !important',
     },
-    // Active line: bright enough to stand out against --surface (#161b22)
-    // without washing out syntax colours on that line.
+    // Active line: low-opacity fill so it's visible against the bare editor
+    // background but barely shifts the selection colour when they overlap.
+    // At 0.15 the blend over #3a5fa0 is ~2-3 RGB points — imperceptible.
     '.cm-activeLine': {
-      backgroundColor: '#1e2a3a !important',
+      backgroundColor: 'rgba(30, 42, 58, 0.3)',
       borderTop:       '1px solid #243040',
       borderBottom:    '1px solid #243040',
     },

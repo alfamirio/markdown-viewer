@@ -1169,10 +1169,11 @@ async function exportPdf() {
     async function renderBlock(el) {
       const tag = el.tagName ? el.tagName.toLowerCase() : '';
 
+      // marging for headers
       if (/^h[1-6]$/.test(tag)) {
         const level = parseInt(tag[1]);
         const sz = [20, 17, 14.5, 12.5, 11.5, 11][level - 1];
-        y += level <= 2 ? 4 : 3;
+        y += 3;
         newPageIfNeeded(sz * 1.8);
         writeWrapped(plain(el), ML, CW, true, false, sz, '#111111', 0);
         y += 1;
@@ -1192,19 +1193,19 @@ async function exportPdf() {
         // Add a fixed gap above and below the rule regardless of what
         // the previous block left in y — predictable spacing is better
         // than trying to compensate for variable trailing gaps.
-        y += 6;
+        y += 0;
         newPageIfNeeded(16);
-        strokeLine(ML, y, ML + CW, '#d1d5db');
-        y += 30;
+        strokeLine(ML, y, ML + CW, '#000000');
+        y += 24;
         return;
       }
 
       if (tag === 'blockquote') {
+        y += 0; // margin above blockquote
         const BQ_SIZE = 10.5;
         const lh = BQ_SIZE * 1.45;
         // vPad: total vertical padding split evenly top/bottom (inside the rect).
-        // Keep it tight — half-pad top, then baseline, then half-pad bottom after last line.
-        const vPad = 10;
+        const vPad = 14;
         const bqX = ML + 12;
         const bqW = CW - 16;
 
@@ -1296,11 +1297,12 @@ async function exportPdf() {
         // rect bottom = last baseline + descent + half-vPad
         const finalBottom = lastBaseline + descent + vPad / 2;
         flushQuoteSegment(finalBottom);
-        y = finalBottom + 4; // small gap after blockquote
+        y = finalBottom + 8; // margin below blockquote
         return;
       }
 
       if (tag === 'pre') {
+        y += 0; // margin above code block
         const PRE_SIZE = 9;
         const text = el.textContent || '';
         setFontMono(PRE_SIZE);
@@ -1347,7 +1349,7 @@ async function exportPdf() {
 
         const finalBottom = lastBaseline + descent + vPad / 2;
         flushCodeSegment(finalBottom);
-        y = finalBottom + 4;
+        y = finalBottom + 8; // margin below code block
         return;
       }
 
@@ -1383,6 +1385,7 @@ async function exportPdf() {
       }
 
       if (tag === 'table') {
+        y += 8; // margin above table
         const rows = Array.from(el.querySelectorAll('tr'));
         if (!rows.length) return;
         const cols = rows[0].querySelectorAll('th,td').length || 1;
@@ -1401,7 +1404,7 @@ async function exportPdf() {
           }
           y += rh;
         }
-        y += 8; return;
+        y += 8; return; // margin below table
       }
 
       if (tag === 'div' && el.classList.contains('mermaid-wrap')) {
@@ -2096,6 +2099,8 @@ function makeDragResizer(splitter, axis, cursor, onMove, isLocked) {
 // ═══════════════════════════════════════════════════
 function DEFAULT_CONTENT(name) {
   return `# ${name}
+
+Lorem ipsum dolor sit amet.
 
 > This note is **auto-saved** to \`localStorage\`. Use it as a reference for everything this editor supports.
 
