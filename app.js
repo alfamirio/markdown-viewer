@@ -867,6 +867,73 @@ function hexToRgb(hex) {
   ];
 }
 
+// ── Inter font loader ─────────────────────────────────────────────────────
+// Fetches Inter and JetBrains Mono TTF files from the local /fonts/ directory
+// and registers them with jsPDF. Results are cached on window._interFontsCache
+// so the fetch only happens once per session (subsequent exports reuse the cache).
+async function loadInterFonts(pdf) {
+  const CACHE_KEY = '_interFontsCache';
+  if (window[CACHE_KEY]) {
+    // Already loaded in a previous export — re-register on this new pdf instance.
+    for (const { filename, b64, name, style } of window[CACHE_KEY]) {
+      pdf.addFileToVFS(filename, b64);
+      pdf.addFont(filename, name, style);
+    }
+    return;
+  }
+
+  // Fetch a local TTF file and return it as Base64.
+  async function fetchTtfB64(path) {
+    const res = await fetch(path);
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' fetching ' + path);
+    const buf = await res.arrayBuffer();
+    // Sanity-check magic bytes — WOFF2 = 0x774F4632, WOFF = 0x774F4646.
+    // TTF/OTF starts with 0x00010000, 0x4F54544F ("OTTO"), or 0x74727565 ("true").
+    const magic = new DataView(buf).getUint32(0);
+    if (magic === 0x774F4632 || magic === 0x774F4646) {
+      throw new Error('Got WOFF/WOFF2 instead of TTF for ' + path);
+    }
+    let bin = '';
+    const bytes = new Uint8Array(buf);
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin);
+  }
+
+  // [local path, jsPDF font name, jsPDF style, filename registered in VFS]
+  const variants = [
+    ['fonts/Inter-Regular.ttf',         'inter',      'normal',     'Inter-Regular.ttf'],
+    ['fonts/Inter-Bold.ttf',            'inter',      'bold',       'Inter-Bold.ttf'],
+    ['fonts/Inter-Italic.ttf',          'inter',      'italic',     'Inter-Italic.ttf'],
+    ['fonts/Inter-Bold.ttf',            'inter',      'bolditalic', 'Inter-Bold.ttf'],
+    ['fonts/JetBrainsMono-Regular.ttf', 'inter-mono', 'normal',     'JetBrainsMono-Regular.ttf'],
+    ['fonts/JetBrainsMono-Regular.ttf', 'inter-mono', 'bold',       'JetBrainsMono-Regular.ttf'],
+    ['fonts/JetBrainsMono-Regular.ttf', 'inter-mono', 'italic',     'JetBrainsMono-Regular.ttf'],
+    ['fonts/JetBrainsMono-Regular.ttf', 'inter-mono', 'bolditalic', 'JetBrainsMono-Regular.ttf'],
+  ];
+
+  // Deduplicate fetches — multiple variants may share the same file (e.g. inter-mono).
+  const fileCache = {};
+  const registered = [];
+  const uniquePaths = [...new Set(variants.map(([path]) => path))];
+  await Promise.all(uniquePaths.map(async path => {
+    try { fileCache[path] = await fetchTtfB64(path); }
+    catch (e) { console.warn('Font fetch failed:', path, e.message); }
+  }));
+  for (const [path, name, style, filename] of variants) {
+    const b64 = fileCache[path];
+    if (!b64) continue;
+    try {
+      pdf.addFileToVFS(filename, b64);
+      pdf.addFont(filename, name, style);
+      registered.push({ filename, b64, name, style });
+    } catch (e) {
+      console.warn('Font register failed:', filename, e.message);
+    }
+  }
+
+  window[CACHE_KEY] = registered;
+}
+
 // ── Text-based PDF export — produces selectable text ─────────────────────
 async function exportPdf() {
   if (typeof window.jspdf === 'undefined') { printFallback(); return; }
@@ -886,6 +953,12 @@ async function exportPdf() {
     const CW = PW - ML - MR;
     let y = MT;
 
+    // Load Inter + JetBrains Mono (fetched once, cached for the session).
+    pdfProgress(true, window._interFontsCache ? 'Building PDF…' : 'Downloading fonts…');
+    await loadInterFonts(pdf);
+    // If font loading failed entirely, fall back gracefully to helvetica/courier.
+    const USE_INTER = pdf.getFontList().hasOwnProperty('inter');
+
     mermaid.initialize({ theme: 'neutral', startOnLoad: false,
       securityLevel: 'loose', flowchart: { curve: 'basis' } });
 
@@ -899,14 +972,16 @@ async function exportPdf() {
         : italic ? 'italic'
         : 'normal';
 
-      pdf.setFont('helvetica', style);
+      pdf.setFont(USE_INTER ? 'inter' : 'helvetica', style);
       pdf.setFontSize(size);
 
       if (hexColor) pdf.setTextColor(...hexToRgb(hexColor));
     }
 
     function setFontMono(size) {
-      pdf.setFont('courier', 'normal'); pdf.setFontSize(size); pdf.setTextColor(26,26,26);
+      pdf.setFont(USE_INTER ? 'inter-mono' : 'courier', 'normal');
+      pdf.setFontSize(size);
+      pdf.setTextColor(26,26,26);
     }
 
     function fillRect(x, ry, w, h, hex) {
@@ -920,7 +995,11 @@ async function exportPdf() {
       pdf.line(x1, ry, x2, ry);
     }
 
-    function plain(el) { return (el.textContent || '').replace(/\s+/g, ' ').trim(); }
+    // plain() extracts text content and normalises whitespace.
+    // Pass all characters through as-is — Inter covers Latin + Latin Extended.
+    function plain(el) {
+      return (el.textContent || '').replace(/\s+/g, ' ').trim();
+    }
 
     function writeWrapped(text, x, maxW, bold, italic, size, hex, afterGap) {
       setFont(bold, italic, size, hex);
@@ -938,8 +1017,8 @@ async function exportPdf() {
     function collectRuns(node, runs, ctx) {
       // ctx = { bold, italic, strike, mono, color }
       if (node.nodeType === Node.TEXT_NODE) {
-        const t = node.textContent.replace(/\s+/g, ' ');
-        if (t) runs.push({ text: t, ...ctx });
+        const raw = node.textContent.replace(/\s+/g, ' ');
+        if (raw) runs.push({ text: raw, ...ctx });
         return;
       }
       if (node.nodeType !== Node.ELEMENT_NODE) return;
@@ -951,7 +1030,21 @@ async function exportPdf() {
       if (tag === 'em'     || tag === 'i')      c.italic = true;
       if (tag === 's' || tag === 'del' || tag === 'strike') c.strike = true;
       if (tag === 'code')                        c.mono   = true;
-      if (tag === 'a') { c.color = '#1a56db'; c.href = node.getAttribute('href') || null; }
+      if (tag === 'a') {
+        c.color = '#1a56db';
+        c.href = node.getAttribute('href') || null;
+        for (const child of node.childNodes) collectRuns(child, runs, c);
+        // Append the URL in grey so it's visible as plain text in the PDF,
+        // not just as a hidden annotation. Only add when href differs from
+        // the link text (avoids "https://x.com (https://x.com)" redundancy).
+        if (c.href) {
+          const linkText = node.textContent.trim();
+          if (linkText !== c.href) {
+            runs.push({ text: ' (' + c.href + ')', bold: false, italic: false, strike: false, mono: false, color: '#6b7280', href: c.href });
+          }
+        }
+        return; // children already collected above
+      }
       for (const child of node.childNodes) collectRuns(child, runs, c);
     }
 
@@ -963,7 +1056,7 @@ async function exportPdf() {
     // Sets jsPDF font for a run's style flags.
     function applyRunFont(run, size, defaultHex) {
       if (run.mono) {
-        pdf.setFont('courier', run.bold ? 'bold' : 'normal');
+        pdf.setFont(USE_INTER ? 'inter-mono' : 'courier', run.bold ? 'bold' : 'normal');
         pdf.setFontSize(size * 0.88);
         pdf.setTextColor(...hexToRgb('#374151'));
       } else {
@@ -1085,11 +1178,11 @@ async function exportPdf() {
 
       if (/^h[1-6]$/.test(tag)) {
         const level = parseInt(tag[1]);
-        const sz = [20, 16, 13.5, 12, 11.5, 11][level - 1];
-        y += level <= 2 ? 14 : 8;
+        const sz = [20, 17, 14.5, 12.5, 11.5, 11][level - 1];
+        y += level <= 2 ? 4 : 3;
         newPageIfNeeded(sz * 1.8);
         writeWrapped(plain(el), ML, CW, true, false, sz, '#111111', 0);
-        y += level <= 2 ? 10 : 4;
+        y += 1;
         return;
       }
 
@@ -1271,7 +1364,17 @@ async function exportPdf() {
           if (li.tagName.toLowerCase() !== 'li') continue;
           const LI_SIZE = 11;
           const lh = LI_SIZE * 1.45;
-          const bullet = tag === 'ul' ? '•' : (idx++) + '.';
+
+          // Task-list items: marked renders [ ] / [x] as a disabled <input type="checkbox">
+          const cb = li.querySelector('input[type="checkbox"]');
+          let bullet;
+          if (cb) {
+            bullet = cb.checked ? '[x]' : '[ ]';
+          } else {
+            bullet = tag === 'ul' ? '\u2022' : (idx) + '.';
+          }
+          if (!cb) idx++;
+
           // Draw bullet first
           setFont(false, false, LI_SIZE, '#1a1a1a');
           newPageIfNeeded(lh);
