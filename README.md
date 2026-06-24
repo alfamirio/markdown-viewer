@@ -54,4 +54,4 @@ Use `?` to view keyboard shortcuts.
 
 > **Storage limitation:** Notes are saved exclusively in your browser's `localStorage`. If you clear site data or browser cache, your notes will be deleted. Export backups regularly using the **↓ .md** button or `Ctrl + Shift + S`.
 
-> **No warranty:** This tool is provided as-is, with no warranty or responability of any kind. For educational use.
+> **No warranty:** This tool is provided as-is, with no warranty or responsibility of any kind. For educational use.
