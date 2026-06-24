@@ -242,12 +242,12 @@ function initPdfExport({ activeNoteName, editor, marked, mermaid, MERMAID_DARK_C
           // Append the URL in grey so it's visible as plain text in the PDF,
           // not just as a hidden annotation. Only add when href differs from
           // the link text (avoids "https://x.com (https://x.com)" redundancy).
-          if (c.href) {
-            const linkText = node.textContent.trim();
-            if (linkText !== c.href) {
-              runs.push({ text: ' (' + c.href + ')', bold: false, italic: false, strike: false, mono: false, color: '#6b7280', href: c.href });
-            }
-          }
+//          if (c.href) {
+//            const linkText = node.textContent.trim();
+//            if (linkText !== c.href) {
+//              runs.push({ text: ' (' + c.href + ')', bold: false, italic: false, strike: false, mono: false, color: '#6b7280', href: c.href });
+//            }
+//          }
           return; // children already collected above
         }
         for (const child of node.childNodes) collectRuns(child, runs, c);

@@ -741,6 +741,67 @@ html, body {
 #preview img { max-width:100%; border-radius:var(--radius); border:1px solid var(--border); }
 #preview input[type="checkbox"] { accent-color:var(--accent); margin-right:6px; }
 
+/* ── Footnotes ─────────────────────────────────── */
+/* Inline superscript reference: [1] */
+#preview .fn-ref {
+  font-size: 0.72em;
+  vertical-align: super;
+  line-height: 1;
+  margin-left: 1px;
+}
+#preview .fn-ref a {
+  color: var(--accent);
+  text-decoration: none;
+  padding: 0 1px;
+  border-radius: 2px;
+  transition: background 0.1s;
+}
+#preview .fn-ref a:hover {
+  background: var(--accent-dim);
+  text-decoration: none;
+}
+
+/* Divider above footnote section */
+#preview .fn-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 28px 0 16px;
+}
+
+/* Footnote list */
+#preview .fn-section { margin-bottom: 16px; }
+#preview .fn-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+#preview .fn-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.85em;
+  color: var(--text-muted);
+  line-height: 1.6;
+  padding: 3px 0;
+}
+#preview .fn-num {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  min-width: 18px;
+}
+#preview .fn-body { flex: 1; }
+#preview .fn-body a { color: var(--accent); }
+#preview .fn-back {
+  flex-shrink: 0;
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 0.9em;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+#preview .fn-back:hover { opacity: 1; color: var(--accent); text-decoration: none; }
+
 /* ── Mermaid ───────────────────────────────────── */
 .mermaid-wrap {
   margin: 16px 0; padding: 20px;
@@ -782,6 +843,12 @@ html, body {
   #preview hr { border-color:#d1d5db!important; }
   #preview img { max-width:100%!important; border-color:#d1d5db!important; }
   #preview p,#preview li { orphans:3; widows:3; }
+  /* Footnotes in print */
+  #preview .fn-divider { border-color:#d1d5db!important; }
+  #preview .fn-item { color:#444!important; }
+  #preview .fn-num { color:#666!important; }
+  #preview .fn-ref a { color:#1a56db!important; }
+  #preview .fn-back { display:none; }
 }
 
 #btn-pdf.printing { opacity:.5; pointer-events:none; }

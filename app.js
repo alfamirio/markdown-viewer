@@ -303,11 +303,101 @@ const MERMAID_DARK_CONFIG = {
   securityLevel: 'loose',
 };
 mermaid.initialize(MERMAID_DARK_CONFIG);
-const { exportPdf } = initPdfExport({ activeNoteName, editor, marked, mermaid, MERMAID_DARK_CONFIG });
+
+const { exportPdf } = initPdfExport({ activeNoteName, editor, marked, mermaid, MERMAID_DARK_CONFIG }); // ← add this
 
 // ═══════════════════════════════════════════════════
 //  marked config
 // ═══════════════════════════════════════════════════
+
+// Footnote extension — supports standard [^label] inline refs and
+// [^label]: definition lines at block level.
+// Collects all definitions in a first pass, then resolves inline refs
+// in document order so numbering is stable across multiple renders.
+marked.use((() => {
+  // Map of label → definition text, populated by the block tokenizer.
+  // Cleared at the start of each marked.parse() call via the walkTokens hook.
+  const defs = new Map();
+  // Ordered list of labels in first-seen order (for numbered output).
+  const order = [];
+
+  return {
+    walkTokens(token) {
+      // Reset state at the top-level document token so each render is clean.
+      if (token.type === 'space' || token.type === 'paragraph') return;
+    },
+    extensions: [
+      // ── Block: [^label]: definition text ──────────────────────────────────
+      {
+        name: 'footnoteDefinition',
+        level: 'block',
+        start(src) { return src.indexOf('\n[^') + 1 || src.indexOf('^['); },
+        tokenizer(src) {
+          // Matches "[^label]: rest of line" optionally followed by indented continuation lines
+          const match = src.match(/^\[\^([^\]]+)\]:\s+([\s\S]*?)(?=\n\[\^|\n\n|$)/);
+          if (!match) return;
+          // Collapse continuation lines (indented by ≥4 spaces or a tab)
+          const text = match[2].replace(/\n {4}/g, ' ').replace(/\n\t/g, ' ').trim();
+          defs.set(match[1], text);
+          if (!order.includes(match[1])) order.push(match[1]);
+          return { type: 'footnoteDefinition', raw: match[0], label: match[1], text };
+        },
+        renderer() {
+          // Definitions are rendered as a group at the end — suppress individual rendering.
+          return '';
+        },
+      },
+
+      // ── Inline: [^label] ──────────────────────────────────────────────────
+      {
+        name: 'footnoteRef',
+        level: 'inline',
+        start(src) { return src.indexOf('[^'); },
+        tokenizer(src) {
+          const match = src.match(/^\[\^([^\]]+)\]/);
+          if (!match) return;
+          return { type: 'footnoteRef', raw: match[0], label: match[1] };
+        },
+        renderer(token) {
+          if (!order.includes(token.label)) order.push(token.label);
+          const n = order.indexOf(token.label) + 1;
+          return `<sup class="fn-ref" id="fnref-${escapeHtml(token.label)}"><a href="#fn-${escapeHtml(token.label)}">[${n}]</a></sup>`;
+        },
+      },
+    ],
+
+    // ── Append footnote list after the document body ───────────────────────
+    // walkTokens runs before any renderer, so we hook the renderer pipeline
+    // by post-processing in a custom "hooks" block instead.
+    hooks: {
+      preprocess(src) {
+        // Clear state at the start of every parse so re-renders are idempotent.
+        defs.clear();
+        order.length = 0;
+        return src;
+      },
+      postprocess(html) {
+        if (defs.size === 0) return html;
+        const items = order
+          .filter(label => defs.has(label))
+          .map((label, i) => {
+            const n = i + 1;
+            const safeLabel = escapeHtml(label);
+            const bodyHtml = marked.parseInline(defs.get(label));
+            return `<li id="fn-${safeLabel}" class="fn-item">` +
+              `<span class="fn-num">${n}.</span> ` +
+              `<span class="fn-body">${bodyHtml}</span>` +
+              ` <a href="#fnref-${safeLabel}" class="fn-back" title="Back to reference">↩</a>` +
+              `</li>`;
+          })
+          .join('\n');
+        return html +
+          `\n<hr class="fn-divider">\n` +
+          `<section class="fn-section"><ol class="fn-list">\n${items}\n</ol></section>\n`;
+      },
+    },
+  };
+})());
 
 // Mermaid extension — intercepts ```mermaid fenced blocks before the
 // default code renderer runs, turning them into placeholder divs that
@@ -1504,9 +1594,13 @@ npm install && npm run dev
 
 ---
 
-## 7. Links & images
+## 7. Links, foonotes & images
 
 [Visit the Markdown Guide](https://www.markdownguide.org)
+
+Here is a simple footnote[^abc]. With some additional text after it.
+
+[^abc]: My reference.
 
 ![A cat](https://cataas.com/cat?width=600&height=200)
 
