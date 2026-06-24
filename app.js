@@ -107,10 +107,6 @@ function deleteNote(id) {
   updateLocalStorageUsage();
 }
 
-function deleteCurrentNote() {
-  deleteNote(activeId);
-}
-
 // ── Switch active note ─────────────────────────────
 function switchNote(id) {
   // Save current before switching
@@ -184,22 +180,19 @@ function renderSidebar() {
 
       let cancelled = false;
 
-      function commit() {
-        if (cancelled) {
-          // Restore span without saving
-          nameEl.textContent = note.name;
-          item.classList.remove('renaming');
-          item.replaceChild(nameEl, input);
-          return;
-        }
-        note.name = input.value.trim() || 'Untitled';
-        saveIndex();
-        // Restore the span
+      function restoreSpan() {
         nameEl.textContent = note.name;
         item.classList.remove('renaming');
         item.replaceChild(nameEl, input);
-        // Sync sidebar name across all items without full re-render
-        renderSidebar();
+      }
+
+      function commit() {
+        if (!cancelled) {
+          note.name = input.value.trim() || 'Untitled';
+          saveIndex();
+        }
+        restoreSpan();
+        if (!cancelled) renderSidebar();
       }
 
       input.addEventListener('blur', commit);
@@ -1202,7 +1195,7 @@ async function exportPdf() {
         y += 6;
         newPageIfNeeded(16);
         strokeLine(ML, y, ML + CW, '#d1d5db');
-        y += 16;
+        y += 30;
         return;
       }
 
@@ -1808,42 +1801,30 @@ const copyRaw = (() => {
   let restoreTimer = null;
   let prevText = '', prevStyle = '';
 
+  function flash(text, color, bg) {
+    // Snapshot the button's original state only on the first call
+    // in a burst — rapid re-copies keep the original as the restore target.
+    if (restoreTimer === null) {
+      prevText  = btn.textContent;
+      prevStyle = btn.getAttribute('style') || '';
+    }
+    clearTimeout(restoreTimer);
+    btn.textContent       = text;
+    btn.style.color       = color;
+    btn.style.borderColor = color;
+    btn.style.background  = bg;
+    btn.style.opacity     = '1';
+    restoreTimer = setTimeout(() => {
+      btn.textContent = prevText;
+      btn.setAttribute('style', prevStyle);
+      restoreTimer = null;
+    }, 1500);
+  }
+
   return function copyRaw() {
-    navigator.clipboard.writeText(editor.value).then(() => {
-      // Snapshot the button's original state only on the first call
-      // in a burst — rapid re-copies keep the original as the restore target.
-      if (restoreTimer === null) {
-        prevText  = btn.textContent;
-        prevStyle = btn.getAttribute('style') || '';
-      }
-      clearTimeout(restoreTimer);
-      btn.textContent       = '✓ copied!';
-      btn.style.color       = 'var(--green)';
-      btn.style.borderColor = 'var(--green)';
-      btn.style.background  = 'rgba(63,185,80,0.12)';
-      btn.style.opacity     = '1';
-      restoreTimer = setTimeout(() => {
-        btn.textContent = prevText;
-        btn.setAttribute('style', prevStyle);
-        restoreTimer = null;
-      }, 1500);
-    }).catch(() => {
-      if (restoreTimer === null) {
-        prevText  = btn.textContent;
-        prevStyle = btn.getAttribute('style') || '';
-      }
-      clearTimeout(restoreTimer);
-      btn.textContent       = '✕ failed';
-      btn.style.color       = 'var(--red)';
-      btn.style.borderColor = 'var(--red)';
-      btn.style.background  = 'rgba(248,81,73,0.12)';
-      btn.style.opacity     = '1';
-      restoreTimer = setTimeout(() => {
-        btn.textContent = prevText;
-        btn.setAttribute('style', prevStyle);
-        restoreTimer = null;
-      }, 1500);
-    });
+    navigator.clipboard.writeText(editor.value)
+      .then(() => flash('✓ copied!', 'var(--green)', 'rgba(63,185,80,0.12)'))
+      .catch(() => flash('✕ failed',  'var(--red)',   'rgba(248,81,73,0.12)'));
   };
 })()
 
@@ -1939,7 +1920,6 @@ function setLayoutEnabled(on) {
   const panel      = document.getElementById('layout-panel');
   const btnLayout  = document.getElementById('btn-layout');
   const checkbox   = document.getElementById('layout-enabled-checkbox');
-  const slidersWrap   = document.getElementById('layout-sliders');
   const sliderSidebar = document.getElementById('layout-slider-sidebar');
   const sliderEditor  = document.getElementById('layout-slider-editor');
   const sliderPreview = document.getElementById('layout-slider-preview');
@@ -1950,8 +1930,6 @@ function setLayoutEnabled(on) {
   // Checkbox toggles the feature on/off
   checkbox.addEventListener('change', () => {
     setLayoutEnabled(checkbox.checked);
-    slidersWrap.style.opacity     = checkbox.checked ? '' : '0.35';
-    slidersWrap.style.pointerEvents = checkbox.checked ? '' : 'none';
   });
 
   // Preview slider is read-only (driven by editor slider)
@@ -2131,6 +2109,8 @@ Regular paragraph text. Lorem ipsum dolor sit amet, consectetur adipiscing elit.
 
 You can also write \`inline code\` inside a sentence, or combine **\`bold code\`**.
 
+Also include common latin unicode á, ñ.
+
 ---
 
 ## 2. Headings
@@ -2193,12 +2173,12 @@ npm install && npm run dev
 
 | Feature            | Supported | Notes                        |
 |--------------------|:---------:|------------------------------|
-| Bold / Italic      | ✅        | Standard Markdown            |
-| Syntax highlighting| ✅        | Via highlight.js             |
-| Mermaid diagrams   | ✅        | Flowcharts, sequence, etc.   |
-| Table of contents  | ✅        | Auto-updates as you type     |
-| PDF export         | ✅        | Via html2canvas + jsPDF      |
-| Dark theme         | ✅        | Only theme (for now)         |
+| Bold / Italic      |    T     | Standard Markdown            |
+| Syntax highlighting|    T     | Via highlight.js             |
+| Mermaid diagrams   |    T     | Flowcharts, sequence, etc.   |
+| Table of contents  |    T     | Auto-updates as you type     |
+| PDF export         |    T     | Via html2canvas + jsPDF      |
+| Dark theme         |    T     | Only theme (for now)         |
 
 ---
 
@@ -2251,19 +2231,15 @@ function updateLocalStorageUsage() {
   }, 0);
 
   const maxBytes = 5242880; 
-  // Separamos la versión string de la numérica
-  const percentageStr = ((totalBytes / maxBytes) * 100).toFixed(1);
-  const percentageNum = parseFloat(percentageStr);
+  const percentage = (totalBytes / maxBytes) * 100;
   const sizeInKB = (totalBytes / 1024).toFixed(1);
 
   const storageElem = document.getElementById('storage-count');
   if (storageElem) {
-    storageElem.textContent = `${percentageStr}% · ${sizeInKB} KB`;
-    
-    // Ahora evaluamos el número real
-    if (percentageNum > 90) {
+    storageElem.textContent = `${percentage.toFixed(1)}% · ${sizeInKB} KB`;
+    if (percentage > 90) {
       storageElem.style.color = 'var(--red)';
-    } else if (percentageNum > 70) {
+    } else if (percentage > 70) {
       storageElem.style.color = 'var(--orange)';
     } else {
       storageElem.style.color = '#e6edf3';
@@ -2447,7 +2423,7 @@ Object.assign(window, {
   closeHkModal, copyRaw, createNote, dismissWarning, downloadMd, exportHtml, exportJson, exportPdf,
   fmt, fmtBlock, fmtLine, insertLink, insertText, loadFile, onFileLoad, openHkModal,
   resetAllData, resetLayoutWidths, setViewMode, tocJump, toggleHighlight, toggleSidebar,
-  toggleToc, toggleWrap, toggleSyncScroll, toggleLayoutPanel, toggleTag, addFreeTag, removeFreeTag,
+  toggleToc, toggleWrap, toggleSyncScroll, toggleTag, addFreeTag, removeFreeTag,
 });
 
 // ═══════════════════════════════════════════════════

@@ -261,7 +261,6 @@
     _fireClick()     { listeners.click.forEach(fn => fn()); },
     _fireKeyup(e)    { listeners.keyup.forEach(fn => fn(e)); },
     _fireKeydown(e)  { listeners.keydown.forEach(fn => fn(e)); },
-    _fireSelection() { /* hook point if selection-only updates are ever needed */ },
 
     // Scroll so the line containing `pos` sits roughly a third of the
     // way down the viewport — used by tocJump(). Uses CM6's own layout

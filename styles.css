@@ -393,23 +393,6 @@ html, body {
 #left-pane  { flex-grow: 55; }
 #right-pane { flex-grow: 45; }
 
-.pane-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 14px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--text-dim);
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  flex-shrink: 0;
-}
-.pane-label .dot { width: 7px; height: 7px; border-radius: 50%; }
-.dot-editor  { background: var(--orange); }
-.dot-preview { background: var(--green); }
 
 #divider {
   width: 5px;
@@ -468,14 +451,6 @@ html, body {
   color: var(--text-dim) !important;
 }
 .cm-gutterElement { font-size: 13.5px; }
-.cm-activeLineGutter { background: transparent; color: var(--text-muted); }
-.cm-activeLine { background: var(--surface); }
-.cm-selectionBackground, .cm-editor.cm-focused .cm-selectionBackground {
-  background: #2d4f8a !important;
-}
-.cm-editor .cm-line ::selection,
-.cm-editor .cm-line::selection { background: #3a5fa0 !important; }
-.cm-cursor { border-left-color: #93c5fd; border-left-width: 3px; }
 .cm-placeholder { color: var(--text-dim); font-style: normal; }
 .cm-matchingBracket, .cm-nonmatchingBracket { background: var(--accent-dim); outline: 1px solid var(--accent); }
 
