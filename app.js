@@ -1849,7 +1849,7 @@ function applyLayoutWidths(sidebarPx, editorPct) {
   if (!layoutEnabled) return;
 
   const sidebarPxClamped  = Math.max(140, Math.min(420, sidebarPx  || 200));
-  const editorPctClamped  = Math.max(20,  Math.min(80,  editorPct  || 55));
+  const editorPctClamped  = Math.max(20,  Math.min(80,  editorPct  || 60));
   const previewPct        = 100 - editorPctClamped;
 
   // Sidebar
@@ -1880,7 +1880,7 @@ function applyLayoutWidths(sidebarPx, editorPct) {
 }
 
 function resetLayoutWidths() {
-  applyLayoutWidths(200, 55);
+  applyLayoutWidths(200, 60);
   saveConfig();
 }
 
@@ -2378,7 +2378,7 @@ clearPreloadClasses();
       // with the slider defaults — any previously-set ratio appeared to
       // "win" purely by flex leftover, not by the layout system.
       document.getElementById('divider').classList.add('locked');
-      const w = cfg.layoutWidths || { sidebar: 200, editorPct: 55 };
+      const w = cfg.layoutWidths || { sidebar: 200, editorPct: 60 };
       applyLayoutWidths(w.sidebar, w.editorPct);
     }
     // (warning footer: show unless user has explicitly dismissed it)
