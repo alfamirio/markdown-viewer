@@ -72,6 +72,31 @@ html, body {
   flex-shrink: 0;
 }
 
+/* ── Toolbar group color tokens ─────────────────── */
+:root {
+  /* file i/o  — amber */
+  --grp-io:        #e3a245;
+  --grp-io-dim:    #2e2010;
+  /* panels — purple */
+  --grp-panel:     #b48eff;
+  --grp-panel-dim: #251b40;
+  /* editor settings — teal */
+  --grp-cfg:       #3ecfcf;
+  --grp-cfg-dim:   #0e2828;
+  /* block elements — green */
+  --grp-block:     #3fb950;
+  --grp-block-dim: #0d2318;
+  /* inline formatting — rose */
+  --grp-fmt:       #f778a1;
+  --grp-fmt-dim:   #2e0d1b;
+  /* headings — gold */
+  --grp-h:         #f2cc60;
+  --grp-h-dim:     #2a1f00;
+  /* tags — lavender */
+  --grp-tag:       #9e9eff;
+  --grp-tag-dim:   #1a1a35;
+}
+
 /* ── Toolbar buttons (override Bootstrap .btn) ── */
 .btn-toolbar {
   display: inline-flex;
@@ -95,6 +120,173 @@ html, body {
 }
 .btn-toolbar:hover { background: var(--border); color: var(--text); opacity: 1; }
 .btn-toolbar.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent-dim); opacity: 1; }
+
+/* ── Toolbar group colours ───────────────────────
+   Each group gets a base color on idle + a colored
+   hover/active state. Opacity stays consistent with
+   the base .btn-toolbar rules above.               */
+
+/* File I/O — import, download md/pdf/html/json, copy */
+.btn-grp-io {
+  color: var(--grp-io);
+  opacity: 1;
+  background: color-mix(in srgb, var(--grp-io) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--grp-io) 50%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--grp-io) 18%, transparent);
+  font-weight: 600;
+}
+.btn-grp-io:hover {
+  background: color-mix(in srgb, var(--grp-io) 22%, transparent);
+  color: var(--grp-io);
+  border-color: color-mix(in srgb, var(--grp-io) 70%, transparent);
+  opacity: 1;
+}
+.btn-grp-io.active {
+  background: color-mix(in srgb, var(--grp-io) 14%, transparent);
+  color: var(--grp-io);
+  border-color: color-mix(in srgb, var(--grp-io) 50%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--grp-io) 18%, transparent);
+  opacity: 1;
+  font-weight: 600;
+}
+
+/* Panel toggles — sidebar, TOC */
+.btn-grp-panel {
+  color: var(--grp-panel);
+  opacity: 0.9;
+  border: 1px solid color-mix(in srgb, var(--grp-panel) 12%, transparent);
+}
+.btn-grp-panel:hover {
+  background: color-mix(in srgb, var(--grp-panel) 10%, transparent);
+  color: var(--grp-panel);
+  border-color: color-mix(in srgb, var(--grp-panel) 30%, transparent);
+  opacity: 1;
+}
+.btn-grp-panel.active {
+  background: color-mix(in srgb, var(--grp-panel) 14%, transparent);
+  color: var(--grp-panel);
+  border-color: color-mix(in srgb, var(--grp-panel) 50%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--grp-panel) 18%, transparent);
+  opacity: 1;
+  font-weight: 600;
+}
+
+/* Editor settings — wrap, highlight, sync, layout */
+.btn-grp-cfg {
+  color: var(--grp-cfg);
+  opacity: 0.9;
+  border: 1px solid color-mix(in srgb, var(--grp-cfg) 12%, transparent);
+}
+.btn-grp-cfg:hover {
+  background: color-mix(in srgb, var(--grp-cfg) 10%, transparent);
+  color: var(--grp-cfg);
+  border-color: color-mix(in srgb, var(--grp-cfg) 30%, transparent);
+  opacity: 1;
+}
+.btn-grp-cfg.active {
+  background: color-mix(in srgb, var(--grp-cfg) 14%, transparent);
+  color: var(--grp-cfg);
+  border-color: color-mix(in srgb, var(--grp-cfg) 50%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--grp-cfg) 18%, transparent);
+  opacity: 1;
+  font-weight: 600;
+}
+
+/* Block elements — code block, blockquote, hr, link, ul, ol, table */
+.btn-grp-block {
+  color: var(--grp-block);
+  opacity: 1;
+  background: color-mix(in srgb, var(--grp-block) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--grp-block) 50%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--grp-block) 18%, transparent);
+  font-weight: 600;
+}
+.btn-grp-block:hover {
+  background: color-mix(in srgb, var(--grp-block) 22%, transparent);
+  color: var(--grp-block);
+  border-color: color-mix(in srgb, var(--grp-block) 70%, transparent);
+  opacity: 1;
+}
+.btn-grp-block.active {
+  background: color-mix(in srgb, var(--grp-block) 14%, transparent);
+  color: var(--grp-block);
+  border-color: color-mix(in srgb, var(--grp-block) 50%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--grp-block) 18%, transparent);
+  opacity: 1;
+  font-weight: 600;
+}
+
+/* Inline formatting — bold, italic, strikethrough, inline code */
+.btn-grp-fmt {
+  color: var(--grp-fmt);
+  opacity: 1;
+  background: color-mix(in srgb, var(--grp-fmt) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--grp-fmt) 50%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--grp-fmt) 18%, transparent);
+  font-weight: 600;
+}
+.btn-grp-fmt:hover {
+  background: color-mix(in srgb, var(--grp-fmt) 22%, transparent);
+  color: var(--grp-fmt);
+  border-color: color-mix(in srgb, var(--grp-fmt) 70%, transparent);
+  opacity: 1;
+}
+.btn-grp-fmt.active {
+  background: color-mix(in srgb, var(--grp-fmt) 14%, transparent);
+  color: var(--grp-fmt);
+  border-color: color-mix(in srgb, var(--grp-fmt) 50%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--grp-fmt) 18%, transparent);
+  opacity: 1;
+  font-weight: 600;
+}
+
+/* Headings — H1, H2, H3 */
+.btn-grp-h {
+  color: var(--grp-h);
+  opacity: 1;
+  background: color-mix(in srgb, var(--grp-h) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--grp-h) 50%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--grp-h) 18%, transparent);
+  font-weight: 600;
+}
+.btn-grp-h:hover {
+  background: color-mix(in srgb, var(--grp-h) 22%, transparent);
+  color: var(--grp-h);
+  border-color: color-mix(in srgb, var(--grp-h) 70%, transparent);
+  opacity: 1;
+}
+.btn-grp-h.active {
+  background: color-mix(in srgb, var(--grp-h) 14%, transparent);
+  color: var(--grp-h);
+  border-color: color-mix(in srgb, var(--grp-h) 50%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--grp-h) 18%, transparent);
+  opacity: 1;
+  font-weight: 600;
+}
+
+/* Tag buttons */
+.btn-grp-tag {
+  color: var(--grp-tag);
+  opacity: 1;
+  background: color-mix(in srgb, var(--grp-tag) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--grp-tag) 50%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--grp-tag) 18%, transparent);
+  font-weight: 600;
+}
+.btn-grp-tag:hover {
+  background: color-mix(in srgb, var(--grp-tag) 22%, transparent);
+  color: var(--grp-tag);
+  border-color: color-mix(in srgb, var(--grp-tag) 70%, transparent);
+  opacity: 1;
+}
+.btn-grp-tag.active {
+  background: color-mix(in srgb, var(--grp-tag) 14%, transparent);
+  color: var(--grp-tag);
+  border-color: color-mix(in srgb, var(--grp-tag) 50%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--grp-tag) 18%, transparent);
+  opacity: 1;
+  font-weight: 600;
+}
 
 .btn-icon {
   padding: 4px 7px;
@@ -677,16 +869,29 @@ html, body {
 
 /* ── View mode toggle ──────────────────────────── */
 .view-toggle {
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: var(--radius); overflow: hidden; flex-shrink: 0;
+  background: var(--bg);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: var(--radius);
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent);
 }
 .view-toggle .btn-toolbar {
-  border-radius: 0; border: none; border-right: 1px solid var(--border);
-  padding: 4px 10px; font-size: 11.5px; opacity: 0.7;
+  border-radius: 0; border: none; border-right: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  padding: 4px 11px; font-size: 12.5px; opacity: 0.75;
+  color: var(--text);
+  font-weight: 500;
+  letter-spacing: 0.1px;
 }
 .view-toggle .btn-toolbar:last-child { border-right: none; }
-.view-toggle .btn-toolbar:hover { opacity: 1; background: var(--border); }
-.view-toggle .btn-toolbar.active { background: var(--accent-dim); color: var(--accent); opacity: 1; border-color: transparent; }
+.view-toggle .btn-toolbar:hover { opacity: 1; background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--text); }
+.view-toggle .btn-toolbar.active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+  opacity: 1;
+  font-weight: 700;
+  border-color: transparent;
+}
 
 /* ── Layout panel ──────────────────────────────── */
 #layout-panel {

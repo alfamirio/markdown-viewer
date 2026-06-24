@@ -45,15 +45,15 @@
       <div class="toolbar-sep"></div>
       <div class="toolbar-sep"></div>
 
-      <button class="btn btn-toolbar" data-tip="Import md, txt or json file" onclick="loadFile()">↑ import</button>
+      <button class="btn btn-toolbar btn-grp-io" data-tip="Import md, txt or json file" onclick="loadFile()">↑ import</button>
       <input type="file" id="file-input" accept=".md,.markdown,.txt,.json" class="d-none" onchange="onFileLoad(event)" />
       <div class="toolbar-sep"></div>
-      <button class="btn btn-toolbar" data-tip="Download md"           onclick="downloadMd()">↓ md</button>
-      <button class="btn btn-toolbar" id="btn-pdf" data-tip="Export PDF" onclick="exportPdf()">↓ pdf</button>
-      <button class="btn btn-toolbar" data-tip="Export standalone HTML"  onclick="exportHtml()">↓ html</button>
-      <button class="btn btn-toolbar" data-tip="Export all notes as JSON" onclick="exportJson()">↓ json</button>
+      <button class="btn btn-toolbar btn-grp-io" data-tip="Download md"           onclick="downloadMd()">↓ md</button>
+      <button class="btn btn-toolbar btn-grp-io" id="btn-pdf" data-tip="Export PDF" onclick="exportPdf()">↓ pdf</button>
+      <button class="btn btn-toolbar btn-grp-io" data-tip="Export standalone HTML"  onclick="exportHtml()">↓ html</button>
+      <button class="btn btn-toolbar btn-grp-io" data-tip="Export all notes as JSON" onclick="exportJson()">↓ json</button>
       <div class="toolbar-sep"></div>
-      <button class="btn btn-toolbar" id="btn-copy" data-tip="Copy raw markdown" onclick="copyRaw()">⎘ copy</button>
+      <button class="btn btn-toolbar btn-grp-io" id="btn-copy" data-tip="Copy raw markdown" onclick="copyRaw()">⎘ copy</button>
 
       <div class="toolbar-sep"></div>
 
@@ -66,15 +66,15 @@
 
       <div class="toolbar-sep"></div>
 
-      <button class="btn btn-toolbar btn-icon active" id="btn-sidebar"     data-tip="Toggle notes panel"          onclick="toggleSidebar()">☰</button>
-      <button class="btn btn-toolbar btn-icon active" id="btn-toc-toolbar" data-tip="Toggle table of contents"    onclick="toggleToc()">§</button>
+      <button class="btn btn-toolbar btn-icon btn-grp-panel active" id="btn-sidebar"     data-tip="Toggle notes panel"          onclick="toggleSidebar()">☰</button>
+      <button class="btn btn-toolbar btn-icon btn-grp-panel active" id="btn-toc-toolbar" data-tip="Toggle table of contents"    onclick="toggleToc()">§</button>
 
       <div class="toolbar-sep"></div>
 
-      <button class="btn btn-toolbar" id="btn-wrap"        data-tip="Toggle word wrap"                              onclick="toggleWrap()">wrap</button>
-      <button class="btn btn-toolbar active" id="btn-highlight"  data-tip="Toggle syntax highlighting"              onclick="toggleHighlight()">highlight</button>
-      <button class="btn btn-toolbar active" id="btn-sync-scroll" data-tip="Link/unlink scroll between editor and preview" onclick="toggleSyncScroll()">⇅ sync</button>
-      <button class="btn btn-toolbar active" id="btn-layout" data-tip="Custom layout widths — click to open/close" onclick="toggleLayoutPanel()">⊞ layout</button>
+      <button class="btn btn-toolbar btn-grp-cfg" id="btn-wrap"        data-tip="Toggle word wrap"                              onclick="toggleWrap()">wrap</button>
+      <button class="btn btn-toolbar btn-grp-cfg active" id="btn-highlight"  data-tip="Toggle syntax highlighting"              onclick="toggleHighlight()">highlight</button>
+      <button class="btn btn-toolbar btn-grp-cfg active" id="btn-sync-scroll" data-tip="Link/unlink scroll between editor and preview" onclick="toggleSyncScroll()">⇅ sync</button>
+      <button class="btn btn-toolbar btn-grp-cfg active" id="btn-layout" data-tip="Custom layout widths — click to open/close" onclick="toggleLayoutPanel()">⊞ layout</button>
 
       <div class="toolbar-sep"></div>
 
@@ -97,37 +97,37 @@
     <!-- Row 2: Markdown formatting -->
     <div class="toolbar-row d-flex align-items-center gap-1 px-3 py-1 overflow-x-auto border-top border-divider">
 
-      <button class="btn btn-toolbar" data-tip="Code block"      onclick="fmtBlock()">``` block</button>
-      <button class="btn btn-toolbar" data-tip="Blockquote"      onclick="fmtLine('> ')">&gt; bq</button>
-      <button class="btn btn-toolbar" data-tip="Horizontal rule" onclick="insertText('\n---\n')">— hr</button>
-      <button class="btn btn-toolbar" data-tip="Link"            onclick="insertLink()">🔗 link</button>
-      <button class="btn btn-toolbar" data-tip="Unordered list"  onclick="fmtLine('- ')">— ul</button>
-      <button class="btn btn-toolbar" data-tip="Ordered list"    onclick="fmtLine('1. ')">1. ol</button>
+      <button class="btn btn-toolbar btn-grp-block" data-tip="Code block"      onclick="fmtBlock()">``` block</button>
+      <button class="btn btn-toolbar btn-grp-block" data-tip="Blockquote"      onclick="fmtLine('> ')">&gt; bq</button>
+      <button class="btn btn-toolbar btn-grp-block" data-tip="Horizontal rule" onclick="insertText('\n---\n')">— hr</button>
+      <button class="btn btn-toolbar btn-grp-block" data-tip="Link"            onclick="insertLink()">🔗 link</button>
+      <button class="btn btn-toolbar btn-grp-block" data-tip="Unordered list"  onclick="fmtLine('- ')">— ul</button>
+      <button class="btn btn-toolbar btn-grp-block" data-tip="Ordered list"    onclick="fmtLine('1. ')">1. ol</button>
 
       <div class="toolbar-sep"></div>
 
-      <button class="btn btn-toolbar" id="btn-table" data-tip="Insert table">⊞ table</button>
+      <button class="btn btn-toolbar btn-grp-block" id="btn-table" data-tip="Insert table">⊞ table</button>
 
       <div class="toolbar-sep"></div>
 
-      <button class="btn btn-toolbar btn-icon" data-tip="Bold  Ctrl+B"        onclick="fmt('**','**')"><b>B</b></button>
-      <button class="btn btn-toolbar btn-icon" data-tip="Italic  Ctrl+I"      onclick="fmt('_','_')"><i>I</i></button>
-      <button class="btn btn-toolbar btn-icon" data-tip="Strikethrough"        onclick="fmt('~~','~~')" style="text-decoration:line-through">S</button>
-      <button class="btn btn-toolbar btn-icon" data-tip="Inline code  Ctrl+`" onclick="fmt('`','`')" style="font-size:11px">{ }</button>
+      <button class="btn btn-toolbar btn-icon btn-grp-fmt" data-tip="Bold  Ctrl+B"        onclick="fmt('**','**')"><b>B</b></button>
+      <button class="btn btn-toolbar btn-icon btn-grp-fmt" data-tip="Italic  Ctrl+I"      onclick="fmt('_','_')"><i>I</i></button>
+      <button class="btn btn-toolbar btn-icon btn-grp-fmt" data-tip="Strikethrough"        onclick="fmt('~~','~~')" style="text-decoration:line-through">S</button>
+      <button class="btn btn-toolbar btn-icon btn-grp-fmt" data-tip="Inline code  Ctrl+`" onclick="fmt('`','`')" style="font-size:11px">{ }</button>
 
       <div class="toolbar-sep"></div>
 
-      <button class="btn btn-toolbar" data-tip="Heading 1" onclick="fmtLine('# ')">H1</button>
-      <button class="btn btn-toolbar" data-tip="Heading 2" onclick="fmtLine('## ')">H2</button>
-      <button class="btn btn-toolbar" data-tip="Heading 3" onclick="fmtLine('### ')">H3</button>
+      <button class="btn btn-toolbar btn-grp-h" data-tip="Heading 1" onclick="fmtLine('# ')">H1</button>
+      <button class="btn btn-toolbar btn-grp-h" data-tip="Heading 2" onclick="fmtLine('## ')">H2</button>
+      <button class="btn btn-toolbar btn-grp-h" data-tip="Heading 3" onclick="fmtLine('### ')">H3</button>
 
       <div class="toolbar-sep"></div>
 
       <span class="toolbar-tags-label">tags:</span>
-      <button class="btn btn-toolbar tag-btn" id="tag-btn-fav"   data-tip="Toggle 'fav' tag"   onclick="toggleTag('fav')">⚑ fav</button>
-      <button class="btn btn-toolbar tag-btn" id="tag-btn-todo"  data-tip="Toggle 'todo' tag"  onclick="toggleTag('todo')">☑ todo</button>
-      <button class="btn btn-toolbar tag-btn" id="tag-btn-draft" data-tip="Toggle 'draft' tag" onclick="toggleTag('draft')">✎ draft</button>
-      <button class="btn btn-toolbar tag-btn" id="tag-btn-bug"   data-tip="Toggle 'bug' tag"   onclick="toggleTag('bug')">🐛 bug</button>
+      <button class="btn btn-toolbar tag-btn btn-grp-tag" id="tag-btn-fav"   data-tip="Toggle 'fav' tag"   onclick="toggleTag('fav')">⚑ fav</button>
+      <button class="btn btn-toolbar tag-btn btn-grp-tag" id="tag-btn-todo"  data-tip="Toggle 'todo' tag"  onclick="toggleTag('todo')">☑ todo</button>
+      <button class="btn btn-toolbar tag-btn btn-grp-tag" id="tag-btn-draft" data-tip="Toggle 'draft' tag" onclick="toggleTag('draft')">✎ draft</button>
+      <button class="btn btn-toolbar tag-btn btn-grp-tag" id="tag-btn-bug"   data-tip="Toggle 'bug' tag"   onclick="toggleTag('bug')">🐛 bug</button>
 
       <div id="tag-input-wrap" data-tip="Add a custom tag — Enter or comma to confirm">
         <div id="tag-chips"></div>
